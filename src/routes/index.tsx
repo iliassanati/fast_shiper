@@ -1,3 +1,4 @@
+import AuthLayout from '@/layouts/Authlayout';
 import MainLayout from '@/layouts/MainLayout';
 import { lazy, Suspense, type ElementType } from 'react';
 import { useRoutes } from 'react-router-dom';
@@ -20,8 +21,20 @@ export default function Router() {
       element: <MainLayout />,
       children: [{ element: <HomePage />, index: true }],
     },
+    {
+      path: 'auth',
+      element: <AuthLayout />,
+      children: [
+        { path: 'login', element: <SignInPage /> },
+        { path: 'register', element: <SignUpPage /> },
+      ],
+    },
   ]);
 }
 
 // MAIN
 const HomePage = Loadable(lazy(() => import('@/pages/HomePage')));
+
+// AUTH
+const SignInPage = Loadable(lazy(() => import('@/pages/auth/SignInPage')));
+const SignUpPage = Loadable(lazy(() => import('@/pages/auth/SignUpPage')));
