@@ -28,6 +28,29 @@ export const useAuthStore = create<AuthState>()(
         loading: false,
         error: null,
 
+        // Add after other actions:
+        initialize: () => {
+          const storedState = localStorage.getItem('auth-store');
+          if (storedState) {
+            try {
+              const parsed = JSON.parse(storedState);
+              if (parsed.state) {
+                set({
+                  user: parsed.state.user,
+                  usAddress: parsed.state.usAddress,
+                  isAuthenticated: parsed.state.isAuthenticated,
+                  loading: false,
+                });
+              }
+            } catch (error) {
+              console.error('Failed to initialize auth state:', error);
+              set({ loading: false });
+            }
+          } else {
+            set({ loading: false });
+          }
+        },
+
         login: async (email: string, password: string) => {
           set({ loading: true, error: null });
           try {

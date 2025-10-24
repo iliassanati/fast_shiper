@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores';
 import { motion } from 'framer-motion';
 import { ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useState } from 'react';
@@ -12,15 +13,25 @@ export default function SignInFormSection() {
     rememberMe: false,
   });
 
+  const login = useAuthStore((state) => state.login);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value =
       e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData({ ...formData, [e.target.name]: value });
   };
 
-  const handleSubmit = () => {
-    console.log('Sign in:', formData);
-    navigate('/dashboard');
+  const handleSubmit = async () => {
+    try {
+      // This will set isAuthenticated to true
+      await login(formData.email, formData.password);
+
+      // Navigation will happen automatically via ProtectedRoute
+      // But we can also manually navigate
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
   };
 
   return (

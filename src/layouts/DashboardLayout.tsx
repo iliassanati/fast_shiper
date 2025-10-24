@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import Logo from '../components/common/Logo';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -34,6 +35,21 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Inside component:
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Determine active section from location
+  const getActiveSection = () => {
+    const path = location.pathname;
+    if (path === '/dashboard') return 'overview';
+    if (path.startsWith('/packages')) return 'packages';
+    if (path.startsWith('/shipments')) return 'shipments';
+    if (path.startsWith('/profile')) return 'profile';
+    if (path.startsWith('/settings')) return 'settings';
+    return 'overview';
+  };
 
   const userInfo = {
     name: 'Youssef El Amrani',
@@ -152,8 +168,9 @@ export default function DashboardLayout({
           {menuItems.map((item) => (
             <motion.button
               key={item.id}
+              onClick={() => navigate(item.href)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                activeSection === item.id
+                getActiveSection() === item.id
                   ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
                   : 'text-slate-700 hover:bg-slate-100'
               }`}
