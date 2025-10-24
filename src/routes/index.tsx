@@ -1,7 +1,6 @@
 // src/routes/index.tsx
 import AuthLayout from '@/layouts/Authlayout';
 import MainLayout from '@/layouts/MainLayout';
-import DashboardLayout from '@/layouts/DashboardLayout';
 import { lazy, Suspense, type ElementType } from 'react';
 import { useRoutes } from 'react-router-dom';
 
@@ -36,7 +35,6 @@ export default function Router() {
       children: [
         { path: 'dashboard', index: true, element: <ClientDashboardPage /> },
         { path: 'consolidation', element: <ConsolidationPage /> },
-        { path: 'repack', element: <RepackPage /> },
         { path: 'request-info', element: <RequestInfoPage /> },
         { path: 'shipping', element: <ShippingPage /> },
       ],
@@ -58,7 +56,6 @@ const ClientDashboardPage = Loadable(
 const ConsolidationPage = Loadable(
   lazy(() => import('@/pages/client/ConsolidationPage'))
 );
-const RepackPage = Loadable(lazy(() => import('@/pages/client/RepackPage')));
 const RequestInfoPage = Loadable(
   lazy(() => import('@/pages/client/RequestInfoPage'))
 );
