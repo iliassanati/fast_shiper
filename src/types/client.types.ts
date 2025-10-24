@@ -92,21 +92,6 @@ export interface ConsolidationRequest {
   totalCost: number;
 }
 
-// Repack Types
-export interface RepackRequest {
-  id: string;
-  packageId: string;
-  options: {
-    removeRetailBox: boolean;
-    addProtection: boolean;
-    minimizeSize: boolean;
-    specialInstructions: string;
-  };
-  status: 'pending' | 'processing' | 'completed';
-  createdAt: string;
-  estimatedSavings: number;
-}
-
 // Photo Request Types
 export type PhotoRequestType = 'photos' | 'information' | 'both';
 

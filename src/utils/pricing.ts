@@ -1,7 +1,6 @@
 // src/utils/pricing.ts
 import {
   CONSOLIDATION_PRICING,
-  REPACK_PRICING,
   PHOTO_REQUEST_PRICING,
   INSURANCE_PRICING,
   DIMENSIONAL_WEIGHT,
@@ -25,13 +24,6 @@ export const calculateConsolidationFee = (
     : 0;
 
   return baseFee + unpackedPhotosFee;
-};
-
-/**
- * Calculate repack fee
- */
-export const calculateRepackFee = (packageCount: number): number => {
-  return packageCount * REPACK_PRICING.BASE_FEE;
 };
 
 /**

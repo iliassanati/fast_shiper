@@ -13,13 +13,6 @@ export const CONSOLIDATION_PRICING = {
   EXTRA_PROTECTION_FEE: 25, // 25 MAD for extra protection
 } as const;
 
-// Repack Pricing
-export const REPACK_PRICING = {
-  BASE_FEE: 50, // 50 MAD (~$5) per package
-  SAVINGS_MULTIPLIER: 100, // Estimate: 100 MAD saved per kg reduced
-  GUARANTEE: true, // Money-back if no savings
-} as const;
-
 // Photo Request Pricing (for standalone photo requests, not consolidation)
 export const PHOTO_REQUEST_PRICING = {
   FIRST_PHOTO: 40, // 40 MAD (~$4) for first additional photo
