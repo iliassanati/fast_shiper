@@ -29,6 +29,12 @@ export default function Router() {
         { path: 'register', element: <SignUpPage /> },
       ],
     },
+    {
+      path: 'client',
+      children: [
+        { path: 'dashboard', index: true, element: <ClientDashboardPage /> },
+      ],
+    },
   ]);
 }
 
@@ -38,3 +44,10 @@ const HomePage = Loadable(lazy(() => import('@/pages/HomePage')));
 // AUTH
 const SignInPage = Loadable(lazy(() => import('@/pages/auth/SignInPage')));
 const SignUpPage = Loadable(lazy(() => import('@/pages/auth/SignUpPage')));
+
+// CLIENT
+const ClientDashboardPage = Loadable(
+  lazy(() => import('@/pages/client/ClientDashboardPage'))
+);
+
+// ADMIN

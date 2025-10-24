@@ -11,7 +11,7 @@ import {
   User,
   X,
 } from 'lucide-react';
-import type { ReactNode, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Logo from '../components/common/Logo';
 
 interface DashboardLayoutProps {

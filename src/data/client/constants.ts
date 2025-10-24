@@ -1,9 +1,10 @@
+// src/data/client/constants.ts
 // Consolidation Pricing
 export const CONSOLIDATION_PRICING = {
   FEE_PER_PACKAGE: 50, // 50 MAD per package (~$5)
   MAX_FEE: 250, // 250 MAD cap (~$25)
-  FREE_PHOTOS: true, // Basic packaging photos are free
-  UNPACKED_PHOTOS_FEE: 20, // 20 MAD (~$2) for unpacked photos
+  FREE_BASIC_PHOTOS: true, // Basic packaging photos are FREE
+  UNPACKED_PHOTOS_FEE: 20, // 20 MAD (~$2) for unpacked/detailed photos
   EXTRA_PROTECTION_FEE: 25, // 25 MAD for extra protection
 } as const;
 
@@ -11,13 +12,14 @@ export const CONSOLIDATION_PRICING = {
 export const REPACK_PRICING = {
   BASE_FEE: 50, // 50 MAD (~$5) per package
   SAVINGS_MULTIPLIER: 100, // Estimate: 100 MAD saved per kg reduced
+  GUARANTEE: true, // Money-back if no savings
 } as const;
 
 // Photo Request Pricing
 export const PHOTO_REQUEST_PRICING = {
-  FIRST_PHOTO: 40, // 40 MAD (~$4)
+  FIRST_PHOTO: 40, // 40 MAD (~$4) for first additional photo
   ADDITIONAL_PHOTO: 10, // 10 MAD per additional photo (~$1)
-  INFORMATION_REQUEST: 10, // 10 MAD (~$1)
+  INFORMATION_REQUEST: 10, // 10 MAD (~$1) for information request
   MAX_PHOTOS: 10, // Maximum 10 additional photos
 } as const;
 
@@ -58,4 +60,10 @@ export const BUSINESS_HOURS = {
   END: '5:00 PM EST',
   TIMEZONE: 'EST',
   DAYS: 'Monday - Friday',
+} as const;
+
+// Currency Conversion (approximate)
+export const CURRENCY = {
+  MAD_TO_USD: 0.1, // 1 MAD ≈ $0.10 USD
+  USD_TO_MAD: 10, // 1 USD ≈ 10 MAD
 } as const;
