@@ -31,12 +31,14 @@ export default function Router() {
       ],
     },
     {
-      path: 'client',
+      path: '/',
       children: [
         { path: 'dashboard', index: true, element: <ClientDashboardPage /> },
         { path: 'consolidation', element: <ConsolidationPage /> },
         { path: 'request-info', element: <RequestInfoPage /> },
         { path: 'shipping', element: <ShippingPage /> },
+        { path: 'profile', element: <ProfilePage /> },
+        { path: 'settings', element: <SettingsPage /> },
       ],
     },
   ]);
@@ -61,4 +63,8 @@ const RequestInfoPage = Loadable(
 );
 const ShippingPage = Loadable(
   lazy(() => import('@/pages/client/ShippingPage'))
+);
+const ProfilePage = Loadable(lazy(() => import('@/pages/client/ProfilePage')));
+const SettingsPage = Loadable(
+  lazy(() => import('@/pages/client/SettingsPage'))
 );

@@ -51,6 +51,7 @@ export default function SignUpFormSection() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Sign up:', formData);
+    navigate('/dashboard');
   };
 
   return (

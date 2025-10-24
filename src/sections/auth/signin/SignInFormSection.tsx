@@ -20,7 +20,7 @@ export default function SignInFormSection() {
 
   const handleSubmit = () => {
     console.log('Sign in:', formData);
-    navigate('/client');
+    navigate('/dashboard');
   };
 
   return (

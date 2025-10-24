@@ -34,6 +34,7 @@ interface PackageItem {
 
 interface ConsolidationWorkflowProps {
   onClose: () => void;
+  onSubmit?: (selectedPackageIds: string[]) => void;
 }
 
 const mockPackages: PackageItem[] = [
@@ -96,6 +97,7 @@ const mockPackages: PackageItem[] = [
 
 export default function ConsolidationWorkflow({
   onClose,
+  onSubmit,
 }: ConsolidationWorkflowProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
@@ -1019,7 +1021,16 @@ export default function ConsolidationWorkflow({
             </motion.button>
 
             <motion.button
-              onClick={currentStep === 3 ? () => setCurrentStep(4) : nextStep}
+              onClick={
+                currentStep === 3
+                  ? () => {
+                      if (onSubmit) {
+                        onSubmit(selectedPackages);
+                      }
+                      setCurrentStep(4);
+                    }
+                  : nextStep
+              }
               disabled={!canProceed()}
               className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 ${
                 canProceed()

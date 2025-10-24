@@ -38,7 +38,7 @@ export default function Header({
         className='px-6 py-2 text-blue-600 font-semibold hover:text-blue-700 transition-colors'
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => navigate('/signin')}
+        onClick={() => navigate('/auth/login')}
       >
         Sign In
       </motion.button>
@@ -46,7 +46,7 @@ export default function Header({
         className='px-6 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold shadow-lg hover:shadow-xl'
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => navigate('/signup')}
+        onClick={() => navigate('/auth/register')}
       >
         Get Started Free
       </motion.button>

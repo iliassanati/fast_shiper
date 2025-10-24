@@ -74,21 +74,21 @@ export default function OverviewSection() {
       title: 'Ship Now',
       desc: 'Create a new shipment',
       gradient: 'from-orange-500 to-red-500',
-      link: '/client/shipping', // Updated path
+      link: '/shipping', // Updated path
     },
     {
       icon: Box,
       title: 'Consolidate',
       desc: 'Combine packages',
       gradient: 'from-blue-500 to-cyan-500',
-      link: '/client/consolidation', // Updated path
+      link: '/consolidation', // Updated path
     },
     {
       icon: Camera,
       title: 'Request Photos',
       desc: 'Additional photos',
       gradient: 'from-purple-500 to-pink-500',
-      link: '/client/request-info', // Updated path
+      link: '/request-info', // Updated path
     },
   ];
 

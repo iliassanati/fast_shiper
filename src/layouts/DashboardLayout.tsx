@@ -24,6 +24,7 @@ interface MenuItem {
   icon: ReactNode;
   label: string;
   badge?: number | null;
+  href: string;
 }
 
 export default function DashboardLayout({
@@ -47,30 +48,35 @@ export default function DashboardLayout({
       icon: <Home className='w-5 h-5' />,
       label: 'Overview',
       badge: null,
+      href: '/dashboard',
     },
     {
       id: 'packages',
       icon: <Package className='w-5 h-5' />,
       label: 'Packages',
       badge: 3,
+      href: '/packages',
     },
     {
       id: 'shipments',
       icon: <Truck className='w-5 h-5' />,
       label: 'Shipments',
       badge: 1,
+      href: '/shipments',
     },
     {
       id: 'profile',
       icon: <User className='w-5 h-5' />,
       label: 'Profile',
       badge: null,
+      href: '/profile',
     },
     {
       id: 'settings',
       icon: <Settings className='w-5 h-5' />,
       label: 'Settings',
       badge: null,
+      href: '/settings',
     },
   ];
 
