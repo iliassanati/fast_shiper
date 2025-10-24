@@ -1,10 +1,15 @@
 // src/data/client/constants.ts
+
 // Consolidation Pricing
 export const CONSOLIDATION_PRICING = {
   FEE_PER_PACKAGE: 50, // 50 MAD per package (~$5)
   MAX_FEE: 250, // 250 MAD cap (~$25)
-  FREE_BASIC_PHOTOS: true, // Basic packaging photos are FREE
+
+  // Photo Pricing
+  BASIC_PHOTOS: 0, // Basic packaging photos are FREE (included)
   UNPACKED_PHOTOS_FEE: 20, // 20 MAD (~$2) for unpacked/detailed photos
+
+  // Additional Services
   EXTRA_PROTECTION_FEE: 25, // 25 MAD for extra protection
 } as const;
 
@@ -15,7 +20,7 @@ export const REPACK_PRICING = {
   GUARANTEE: true, // Money-back if no savings
 } as const;
 
-// Photo Request Pricing
+// Photo Request Pricing (for standalone photo requests, not consolidation)
 export const PHOTO_REQUEST_PRICING = {
   FIRST_PHOTO: 40, // 40 MAD (~$4) for first additional photo
   ADDITIONAL_PHOTO: 10, // 10 MAD per additional photo (~$1)
