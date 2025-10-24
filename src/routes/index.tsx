@@ -1,3 +1,4 @@
+import MainLayout from '@/layouts/MainLayout';
 import { lazy, Suspense, type ElementType } from 'react';
 import { useRoutes } from 'react-router-dom';
 
@@ -16,6 +17,7 @@ export default function Router() {
   return useRoutes([
     {
       path: '/',
+      element: <MainLayout />,
       children: [{ element: <HomePage />, index: true }],
     },
   ]);
