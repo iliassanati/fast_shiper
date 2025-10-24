@@ -18,7 +18,7 @@ export default function HowItWorksSection() {
             Simple Process
           </span>
           <h2 className='text-4xl md:text-5xl font-bold text-slate-900 mb-4'>
-            How Shipzy Works
+            How Fast Shipper Works
           </h2>
           <p className='text-xl text-slate-600 max-w-2xl mx-auto'>
             Get started in 5 simple steps and start shopping from the USA today

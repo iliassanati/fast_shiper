@@ -18,7 +18,7 @@ export default function FeaturesSection() {
             Why Choose Us
           </span>
           <h2 className='text-4xl md:text-5xl font-bold text-slate-900 mb-4'>
-            Everything You Need
+            Our Services
           </h2>
           <p className='text-xl text-slate-600 max-w-2xl mx-auto'>
             Comprehensive features to make international shopping effortless

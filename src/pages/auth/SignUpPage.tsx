@@ -5,8 +5,8 @@ export default function SignUpPage() {
   return (
     <div className='max-w-6xl mx-auto'>
       <div className='grid lg:grid-cols-2 gap-12 items-start'>
-        <SignUpBenefitsSection />
         <SignUpFormSection />
+        <SignUpBenefitsSection />
       </div>
     </div>
   );

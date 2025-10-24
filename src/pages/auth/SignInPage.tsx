@@ -5,8 +5,8 @@ export default function SignInPage() {
   return (
     <div className='max-w-6xl mx-auto'>
       <div className='grid lg:grid-cols-2 gap-16 items-center'>
-        <SignInBrandingSection />
         <SignInFormSection />
+        <SignInBrandingSection />
       </div>
     </div>
   );

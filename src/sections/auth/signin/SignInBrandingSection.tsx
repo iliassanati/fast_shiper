@@ -38,7 +38,7 @@ export default function SignInBrandingSection() {
         <h1 className='text-6xl font-bold text-slate-900 mb-6 leading-tight'>
           Welcome Back to
           <span className='block bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent'>
-            Shipzy
+            Fast Shipper
           </span>
         </h1>
 
@@ -69,24 +69,6 @@ export default function SignInBrandingSection() {
             </motion.div>
           ))}
         </div>
-
-        {/* Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          className='mt-12 flex items-center gap-8 p-6 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl shadow-xl'
-        >
-          <div className='text-white'>
-            <p className='text-4xl font-bold'>5,000+</p>
-            <p className='text-blue-100'>Active Users</p>
-          </div>
-          <div className='h-12 w-px bg-white opacity-30' />
-          <div className='text-white'>
-            <p className='text-4xl font-bold'>50K+</p>
-            <p className='text-blue-100'>Packages Shipped</p>
-          </div>
-        </motion.div>
       </motion.div>
     </motion.div>
   );
