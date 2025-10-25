@@ -27,7 +27,6 @@ export default function Header({
   const navItems = [
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'Features', href: '#features' },
-    { label: 'Pricing', href: '#pricing' },
     { label: 'Calculator', href: '#calculator' },
     { label: 'FAQ', href: '#faq' },
   ];
@@ -79,9 +78,8 @@ export default function Header({
                   {item.label}
                 </a>
               ))}
+              {renderAuthButtons()}
             </div>
-
-            {renderAuthButtons()}
 
             {/* Mobile Menu Button */}
             <button
@@ -101,7 +99,7 @@ export default function Header({
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
-              className='lg:hidden pt-4 pb-6 space-y-4'
+              className='lg:hidden pt-4 pb-6 space-y-4 '
             >
               {navItems.map((item) => (
                 <a

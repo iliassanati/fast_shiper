@@ -31,11 +31,13 @@ export default function Logo({
     >
       <div className='relative'>
         <motion.div
-          className='w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg'
+          // className='w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg'
+          className='w-20 h-20  rounded-xl flex items-center justify-center shadow-lg'
           whileHover={{ rotate: 360 }}
           transition={{ duration: 0.6 }}
         >
-          <Package className='w-7 h-7 text-white' />
+          {/* <Package className='w-7 h-7 text-white' /> */}
+          <img src={'/2.png'} />
         </motion.div>
         <motion.div
           className='absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full'
@@ -45,9 +47,8 @@ export default function Logo({
       </div>
       <div>
         <span className='text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent'>
-          Shipzy
+          Fast Shipper
         </span>
-        <img src='/1.png' className='w-10 h-10' />
         {showSubtitle && (
           <p className='text-xs text-slate-600'>USA to Morocco</p>
         )}
