@@ -1,5 +1,5 @@
 import AuthLayout from '@/layouts/Authlayout';
-import DashboardLayout from '@/layouts/DashboardLayout';
+import LoadingScreen from '@/components/common/LoadingScreen';
 import MainLayout from '@/layouts/MainLayout';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import PublicRoute from '@/components/auth/PublicRoute';
@@ -10,12 +10,7 @@ import { useRoutes, Link } from 'react-router-dom';
 // LOADING COMPONENT
 // -------------------------------------------------------------------------
 const LoadingFallback = () => (
-  <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50'>
-    <div className='text-center'>
-      <div className='w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4'></div>
-      <p className='text-slate-600 font-semibold'>Loading...</p>
-    </div>
-  </div>
+  <LoadingScreen loadingText='Loading page...' minDisplayTime={500} />
 );
 
 // -------------------------------------------------------------------------
@@ -185,6 +180,12 @@ export default function Router() {
         <ProtectedRoute>
           <SettingsPage />
         </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'loading',
+      element: (
+        <LoadingScreen loadingText='Loading page...' minDisplayTime={500} />
       ),
     },
 
