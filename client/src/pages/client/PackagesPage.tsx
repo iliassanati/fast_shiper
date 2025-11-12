@@ -278,6 +278,67 @@ export default function PackagesPage() {
           </AnimatePresence>
         </div>
 
+        {/* Stats Summary */}
+        {packages.length > 0 && (
+          <div className='grid md:grid-cols-4 gap-4'>
+            <div className='bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200'>
+              <div className='flex items-center gap-3'>
+                <div className='w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center'>
+                  <Package className='w-5 h-5 text-white' />
+                </div>
+                <div>
+                  <p className='text-xs text-slate-600'>Total Packages</p>
+                  <p className='text-2xl font-bold text-slate-900'>
+                    {packages.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200'>
+              <div className='flex items-center gap-3'>
+                <div className='w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center'>
+                  <Archive className='w-5 h-5 text-white' />
+                </div>
+                <div>
+                  <p className='text-xs text-slate-600'>In Storage</p>
+                  <p className='text-2xl font-bold text-slate-900'>
+                    {packages.filter((p) => p.status === 'received').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className='bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200'>
+              <div className='flex items-center gap-3'>
+                <div className='w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center'>
+                  <Box className='w-5 h-5 text-white' />
+                </div>
+                <div>
+                  <p className='text-xs text-slate-600'>Consolidated</p>
+                  <p className='text-2xl font-bold text-slate-900'>
+                    {packages.filter((p) => p.status === 'consolidated').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className='bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-200'>
+              <div className='flex items-center gap-3'>
+                <div className='w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center'>
+                  <Truck className='w-5 h-5 text-white' />
+                </div>
+                <div>
+                  <p className='text-xs text-slate-600'>Shipped</p>
+                  <p className='text-2xl font-bold text-slate-900'>
+                    {packages.filter((p) => p.status === 'shipped').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Status Filter Tabs */}
         <div className='flex gap-3 flex-wrap'>
           {statusOptions.map((option) => (
@@ -401,67 +462,6 @@ export default function PackagesPage() {
               </button>
             )}
           </motion.div>
-        )}
-
-        {/* Stats Summary */}
-        {packages.length > 0 && (
-          <div className='grid md:grid-cols-4 gap-4'>
-            <div className='bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center'>
-                  <Package className='w-5 h-5 text-white' />
-                </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Total Packages</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packages.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center'>
-                  <Archive className='w-5 h-5 text-white' />
-                </div>
-                <div>
-                  <p className='text-xs text-slate-600'>In Storage</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packages.filter((p) => p.status === 'received').length}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className='bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center'>
-                  <Box className='w-5 h-5 text-white' />
-                </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Consolidated</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packages.filter((p) => p.status === 'consolidated').length}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className='bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center'>
-                  <Truck className='w-5 h-5 text-white' />
-                </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Shipped</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packages.filter((p) => p.status === 'shipped').length}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </DashboardLayout>
