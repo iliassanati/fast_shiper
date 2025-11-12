@@ -1,21 +1,51 @@
-// src/stores/useAuthStore.ts
+// client/src/stores/useAuthStore.ts - UPDATED VERSION
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import axios from 'axios';
 import type { UserInfo, USAddress } from '@/types/client.types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:1337/api';
+
+// Create axios instance with defaults
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add token to requests if available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth-token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 interface AuthState {
   user: UserInfo | null;
   usAddress: USAddress | null;
+  token: string | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  register: (data: {
+    name: string;
+    email: string;
+    password: string;
+    phone: string;
+    city: string;
+  }) => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
   setUser: (user: UserInfo) => void;
   setUSAddress: (address: USAddress) => void;
   updateProfile: (updates: Partial<UserInfo>) => Promise<void>;
+  clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -24,86 +54,131 @@ export const useAuthStore = create<AuthState>()(
       (set, get) => ({
         user: null,
         usAddress: null,
+        token: null,
         isAuthenticated: false,
         loading: false,
         error: null,
 
-        // Add after other actions:
-        initialize: () => {
-          const storedState = localStorage.getItem('auth-store');
-          if (storedState) {
-            try {
-              const parsed = JSON.parse(storedState);
-              if (parsed.state) {
-                set({
-                  user: parsed.state.user,
-                  usAddress: parsed.state.usAddress,
-                  isAuthenticated: parsed.state.isAuthenticated,
-                  loading: false,
-                });
-              }
-            } catch (error) {
-              console.error('Failed to initialize auth state:', error);
-              set({ loading: false });
-            }
-          } else {
-            set({ loading: false });
-          }
-        },
+        clearError: () => set({ error: null }),
 
         login: async (email: string, password: string) => {
           set({ loading: true, error: null });
           try {
-            // TODO: Replace with actual API call
-            // const response = await authAPI.login(email, password);
+            const response = await api.post('/auth/login', {
+              email,
+              password,
+            });
 
-            // Mock data for now
-            const mockUser: UserInfo = {
-              id: 'USER001',
-              name: 'Youssef El Amrani',
-              email: email,
-              suiteNumber: 'MA-1234',
-              avatar: '👨',
-              phone: '+212 6XX-XXXXXX',
-              address: {
-                street: '123 Rue Mohammed V, Apt 4B',
-                city: 'Casablanca',
-                postalCode: '20000',
-                country: 'Morocco',
-              },
-            };
+            const { user, usAddress, token } = response.data.data;
 
-            const mockUSAddress: USAddress = {
-              name: mockUser.name,
-              suite: `Suite ${mockUser.suiteNumber}`,
-              street: '123 Warehouse Drive',
-              city: 'Wilmington, DE 19801',
-              country: 'United States',
-              phone: '+1 (555) 123-4567',
-            };
+            // Store token
+            localStorage.setItem('auth-token', token);
 
             set({
-              user: mockUser,
-              usAddress: mockUSAddress,
+              user,
+              usAddress,
+              token,
               isAuthenticated: true,
               loading: false,
+              error: null,
             });
-          } catch (error) {
+          } catch (error: any) {
+            const errorMessage =
+              error.response?.data?.error || 'Login failed. Please try again.';
             set({
-              error: 'Login failed. Please check your credentials.',
+              error: errorMessage,
               loading: false,
+              isAuthenticated: false,
             });
-            throw error;
+            throw new Error(errorMessage);
           }
         },
 
-        logout: () => {
-          set({
-            user: null,
-            usAddress: null,
-            isAuthenticated: false,
-            error: null,
-          });
+        register: async (data) => {
+          set({ loading: true, error: null });
+          try {
+            const response = await api.post('/auth/register', data);
+
+            const { user, usAddress, token } = response.data.data;
+
+            // Store token
+            localStorage.setItem('auth-token', token);
+
+            set({
+              user,
+              usAddress,
+              token,
+              isAuthenticated: true,
+              loading: false,
+              error: null,
+            });
+          } catch (error: any) {
+            const errorMessage =
+              error.response?.data?.error ||
+              error.response?.data?.errors ||
+              'Registration failed. Please try again.';
+            set({
+              error:
+                typeof errorMessage === 'object'
+                  ? Object.values(errorMessage).join(', ')
+                  : errorMessage,
+              loading: false,
+            });
+            throw new Error(errorMessage);
+          }
+        },
+
+        logout: async () => {
+          try {
+            // Call logout endpoint (optional, since JWT is stateless)
+            await api.post('/auth/logout');
+          } catch (error) {
+            console.error('Logout error:', error);
+          } finally {
+            // Clear local storage and state
+            localStorage.removeItem('auth-token');
+            set({
+              user: null,
+              usAddress: null,
+              token: null,
+              isAuthenticated: false,
+              error: null,
+            });
+          }
+        },
+
+        checkAuth: async () => {
+          const token = localStorage.getItem('auth-token');
+
+          if (!token) {
+            set({ loading: false, isAuthenticated: false });
+            return;
+          }
+
+          set({ loading: true });
+          try {
+            const response = await api.get('/auth/me');
+            const { user, usAddress } = response.data.data;
+
+            set({
+              user,
+              usAddress,
+              token,
+              isAuthenticated: true,
+              loading: false,
+              error: null,
+            });
+          } catch (error) {
+            // Token is invalid, clear everything
+            localStorage.removeItem('auth-token');
+            set({
+              user: null,
+              usAddress: null,
+              token: null,
+              isAuthenticated: false,
+              loading: false,
+            });
+          }
         },
 
         setUser: (user) => set({ user, isAuthenticated: true }),
@@ -116,19 +191,21 @@ export const useAuthStore = create<AuthState>()(
 
           set({ loading: true, error: null });
           try {
-            // TODO: API call
-            // await userAPI.updateProfile(updates);
+            const response = await api.put('/auth/profile', updates);
+            const { user } = response.data.data;
 
             set({
-              user: { ...currentUser, ...updates },
+              user,
               loading: false,
             });
-          } catch (error) {
+          } catch (error: any) {
+            const errorMessage =
+              error.response?.data?.error || 'Failed to update profile';
             set({
-              error: 'Failed to update profile',
+              error: errorMessage,
               loading: false,
             });
-            throw error;
+            throw new Error(errorMessage);
           }
         },
       }),
@@ -137,9 +214,15 @@ export const useAuthStore = create<AuthState>()(
         partialize: (state) => ({
           user: state.user,
           usAddress: state.usAddress,
+          token: state.token,
           isAuthenticated: state.isAuthenticated,
         }),
       }
     )
   )
 );
+
+// Initialize auth on app load
+if (typeof window !== 'undefined') {
+  useAuthStore.getState().checkAuth();
+}
