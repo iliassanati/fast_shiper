@@ -112,13 +112,19 @@ export default function Header({
                 </a>
               ))}
               <button
-                onClick={() => navigate('/signin')}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate('/auth/login');
+                }}
                 className='w-full py-2 text-blue-600 font-semibold'
               >
                 Sign In
               </button>
               <button
-                onClick={() => navigate('/signup')}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate('/auth/register');
+                }}
                 className='w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-semibold'
               >
                 Get Started Free
@@ -144,7 +150,7 @@ export default function Header({
             Don't have an account?{' '}
             <span
               className='text-blue-600 font-semibold hover:text-blue-700 cursor-pointer'
-              onClick={() => navigate('/signup')}
+              onClick={() => navigate('/auth/register')}
             >
               Sign Up Free
             </span>

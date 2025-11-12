@@ -45,7 +45,7 @@ const userSchema = new Schema<IUserDocument>(
     address: {
       street: {
         type: String,
-        required: [true, 'Street address is required'],
+        default: '',
         trim: true,
       },
       city: {
@@ -55,7 +55,7 @@ const userSchema = new Schema<IUserDocument>(
       },
       postalCode: {
         type: String,
-        required: [true, 'Postal code is required'],
+        default: '',
         trim: true,
       },
       country: {
