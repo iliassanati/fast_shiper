@@ -1,6 +1,7 @@
-// src/stores/useNotificationStore.ts
+// client/src/stores/useNotificationStore.ts
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { apiHelpers } from '@/lib/api';
 
 export interface Notification {
   id: string;
@@ -8,10 +9,16 @@ export interface Notification {
   type: 'success' | 'error' | 'warning' | 'info';
   timestamp: number;
   read: boolean;
+  title?: string;
+  actionUrl?: string;
+  relatedId?: string;
+  relatedModel?: string;
 }
 
 interface NotificationState {
   notifications: Notification[];
+  loading: boolean;
+  error: string | null;
 
   // Getters
   getUnreadCount: () => number;
@@ -20,14 +27,23 @@ interface NotificationState {
   // Actions
   addNotification: (message: string, type?: Notification['type']) => void;
   removeNotification: (id: string) => void;
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
   clearAll: () => void;
+  fetchNotifications: (filters?: {
+    read?: boolean;
+    type?: string;
+    page?: number;
+    limit?: number;
+  }) => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
 }
 
 export const useNotificationStore = create<NotificationState>()(
   devtools((set, get) => ({
     notifications: [],
+    loading: false,
+    error: null,
 
     // Getters
     getUnreadCount: () => {
@@ -65,18 +81,113 @@ export const useNotificationStore = create<NotificationState>()(
         notifications: state.notifications.filter((n) => n.id !== id),
       })),
 
-    markAsRead: (id) =>
-      set((state) => ({
-        notifications: state.notifications.map((n) =>
-          n.id === id ? { ...n, read: true } : n
-        ),
-      })),
+    markAsRead: async (id) => {
+      set({ loading: true, error: null });
+      try {
+        await apiHelpers.put(`/notifications/${id}/read`, {});
 
-    markAllAsRead: () =>
-      set((state) => ({
-        notifications: state.notifications.map((n) => ({ ...n, read: true })),
-      })),
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+          ),
+          loading: false,
+        }));
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to mark notification as read',
+          loading: false,
+        });
+        throw error;
+      }
+    },
+
+    markAllAsRead: async () => {
+      set({ loading: true, error: null });
+      try {
+        await apiHelpers.put('/notifications/read-all', {});
+
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, read: true })),
+          loading: false,
+        }));
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to mark all notifications as read',
+          loading: false,
+        });
+        throw error;
+      }
+    },
 
     clearAll: () => set({ notifications: [] }),
+
+    fetchNotifications: async (filters) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await apiHelpers.get<{
+          notifications: any[];
+          unreadCount: number;
+          pagination: any;
+        }>('/notifications', filters);
+
+        // Transform API notifications to match store format
+        const notifications: Notification[] = response.notifications.map(
+          (n) => ({
+            id: n.id || n._id,
+            message: n.message,
+            type: mapNotificationType(n.type),
+            timestamp: new Date(n.createdAt).getTime(),
+            read: n.read,
+            title: n.title,
+            actionUrl: n.actionUrl,
+            relatedId: n.relatedId,
+            relatedModel: n.relatedModel,
+          })
+        );
+
+        set({
+          notifications,
+          loading: false,
+        });
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to fetch notifications',
+          loading: false,
+        });
+        throw error;
+      }
+    },
+
+    deleteNotification: async (id: string) => {
+      set({ loading: true, error: null });
+      try {
+        await apiHelpers.delete(`/notifications/${id}`);
+
+        set((state) => ({
+          notifications: state.notifications.filter((n) => n.id !== id),
+          loading: false,
+        }));
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to delete notification',
+          loading: false,
+        });
+        throw error;
+      }
+    },
   }))
 );
+
+// Helper function to map API notification types to store types
+function mapNotificationType(apiType: string): Notification['type'] {
+  const typeMap: Record<string, Notification['type']> = {
+    package_received: 'info',
+    shipment_update: 'info',
+    consolidation_complete: 'success',
+    photo_request_complete: 'success',
+    payment_received: 'success',
+    storage_warning: 'warning',
+  };
+
+  return typeMap[apiType] || 'info';
+}

@@ -1,7 +1,8 @@
-// src/stores/useDashboardStore.ts
+// client/src/stores/useDashboardStore.ts
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { DashboardStats } from '@/types/client.types';
+import { apiHelpers } from '@/lib/api';
 
 interface DashboardState {
   stats: DashboardStats;
@@ -30,16 +31,30 @@ export const useDashboardStore = create<DashboardState>()(
     fetchStats: async () => {
       set({ loading: true, error: null });
       try {
-        // TODO: API call
-        // const response = await dashboardAPI.getStats();
+        // Fetch stats from packages endpoint
+        const packageStats = await apiHelpers.get<{
+          stats: {
+            total: number;
+            inStorage: number;
+            consolidated: number;
+            shipped: number;
+            avgStorageDays: number;
+            storageDaysLeft: number;
+          };
+        }>('/packages/stats');
 
-        const { mockDashboardStats } = await import(
-          '@/data/client/mockUserData'
-        );
-        set({ stats: mockDashboardStats, loading: false });
-      } catch (error) {
         set({
-          error: 'Failed to fetch dashboard stats',
+          stats: {
+            totalPackages: packageStats.stats.total,
+            inStorage: packageStats.stats.inStorage,
+            shipped: packageStats.stats.shipped,
+            storageDaysLeft: packageStats.stats.storageDaysLeft,
+          },
+          loading: false,
+        });
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to fetch dashboard stats',
           loading: false,
         });
         throw error;

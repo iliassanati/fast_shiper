@@ -1,7 +1,8 @@
-// src/stores/usePackageStore.ts
+// client/src/stores/usePackageStore.ts
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { Package, PackageStatus } from '@/types/client.types';
+import { apiHelpers } from '@/lib/api';
 
 interface PackageState {
   packages: Package[];
@@ -24,7 +25,13 @@ interface PackageState {
   selectMultiplePackages: (ids: string[]) => void;
   clearSelection: () => void;
   setFilterStatus: (status: PackageStatus | 'all') => void;
-  fetchPackages: () => Promise<void>;
+  fetchPackages: (filters?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => Promise<void>;
+  fetchPackageById: (id: string) => Promise<Package>;
+  deletePackage: (id: string) => Promise<void>;
 }
 
 export const usePackageStore = create<PackageState>()(
@@ -85,18 +92,53 @@ export const usePackageStore = create<PackageState>()(
 
     setFilterStatus: (status) => set({ filterStatus: status }),
 
-    fetchPackages: async () => {
+    fetchPackages: async (filters) => {
       set({ loading: true, error: null });
       try {
-        // TODO: Replace with API call
-        // const response = await packageAPI.getPackages();
+        const response = await apiHelpers.get<{
+          packages: Package[];
+          pagination: any;
+        }>('/packages', filters);
 
-        // Mock data for now (using your existing mockPackages)
-        const { mockPackages } = await import('@/data/client/mockPackages');
-        set({ packages: mockPackages, loading: false });
-      } catch (error) {
+        set({ packages: response.packages, loading: false });
+      } catch (error: any) {
         set({
-          error: 'Failed to fetch packages',
+          error: error.message || 'Failed to fetch packages',
+          loading: false,
+        });
+        throw error;
+      }
+    },
+
+    fetchPackageById: async (id: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await apiHelpers.get<{ package: Package }>(
+          `/packages/${id}`
+        );
+
+        // Update the package in the store
+        get().updatePackage(id, response.package);
+        set({ loading: false });
+        return response.package;
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to fetch package',
+          loading: false,
+        });
+        throw error;
+      }
+    },
+
+    deletePackage: async (id: string) => {
+      set({ loading: true, error: null });
+      try {
+        await apiHelpers.delete(`/packages/${id}`);
+        get().removePackage(id);
+        set({ loading: false });
+      } catch (error: any) {
+        set({
+          error: error.message || 'Failed to delete package',
           loading: false,
         });
         throw error;
