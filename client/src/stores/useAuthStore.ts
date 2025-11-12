@@ -1,4 +1,4 @@
-// client/src/stores/useAuthStore.ts - UPDATED VERSION
+// client/src/stores/useAuthStore.ts - FIXED VERSION
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import axios from 'axios';
@@ -6,7 +6,6 @@ import type { UserInfo, USAddress } from '@/types/client.types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:1337/api';
 
-// Create axios instance with defaults
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -14,7 +13,6 @@ const api = axios.create({
   },
 });
 
-// Add token to requests if available
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
@@ -30,8 +28,8 @@ interface AuthState {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
+  initialized: boolean; // NEW: track if auth has been initialized
 
-  // Actions
   login: (email: string, password: string) => Promise<void>;
   register: (data: {
     name: string;
@@ -56,8 +54,9 @@ export const useAuthStore = create<AuthState>()(
         usAddress: null,
         token: null,
         isAuthenticated: false,
-        loading: false,
+        loading: true, // FIX: Start with loading true
         error: null,
+        initialized: false, // FIX: Track initialization
 
         clearError: () => set({ error: null }),
 
@@ -71,7 +70,6 @@ export const useAuthStore = create<AuthState>()(
 
             const { user, usAddress, token } = response.data.data;
 
-            // Store token
             localStorage.setItem('auth-token', token);
 
             set({
@@ -101,7 +99,6 @@ export const useAuthStore = create<AuthState>()(
 
             const { user, usAddress, token } = response.data.data;
 
-            // Store token
             localStorage.setItem('auth-token', token);
 
             set({
@@ -130,12 +127,10 @@ export const useAuthStore = create<AuthState>()(
 
         logout: async () => {
           try {
-            // Call logout endpoint (optional, since JWT is stateless)
             await api.post('/auth/logout');
           } catch (error) {
             console.error('Logout error:', error);
           } finally {
-            // Clear local storage and state
             localStorage.removeItem('auth-token');
             set({
               user: null,
@@ -143,6 +138,7 @@ export const useAuthStore = create<AuthState>()(
               token: null,
               isAuthenticated: false,
               error: null,
+              loading: false,
             });
           }
         },
@@ -151,7 +147,11 @@ export const useAuthStore = create<AuthState>()(
           const token = localStorage.getItem('auth-token');
 
           if (!token) {
-            set({ loading: false, isAuthenticated: false });
+            set({
+              loading: false,
+              isAuthenticated: false,
+              initialized: true, // FIX: Mark as initialized
+            });
             return;
           }
 
@@ -167,9 +167,10 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               loading: false,
               error: null,
+              initialized: true, // FIX: Mark as initialized
             });
           } catch (error) {
-            // Token is invalid, clear everything
+            console.error('Auth check failed:', error);
             localStorage.removeItem('auth-token');
             set({
               user: null,
@@ -177,6 +178,7 @@ export const useAuthStore = create<AuthState>()(
               token: null,
               isAuthenticated: false,
               loading: false,
+              initialized: true, // FIX: Mark as initialized
             });
           }
         },
@@ -222,7 +224,10 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Initialize auth on app load
+// FIX: Initialize auth properly
 if (typeof window !== 'undefined') {
-  useAuthStore.getState().checkAuth();
+  // Call checkAuth after store is hydrated
+  useAuthStore.persist.onFinishHydration(() => {
+    useAuthStore.getState().checkAuth();
+  });
 }

@@ -1,3 +1,4 @@
+// client/src/components/auth/ProtectedRoute.tsx - FIXED
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores';
 import type { ReactNode } from 'react';
@@ -11,11 +12,11 @@ export default function ProtectedRoute({
   children,
   redirectTo = '/auth/login',
 }: ProtectedRouteProps) {
-  const { isAuthenticated, loading } = useAuthStore();
+  const { isAuthenticated, loading, initialized } = useAuthStore();
   const location = useLocation();
 
-  // Show loading state while checking auth
-  if (loading) {
+  // FIX: Wait for auth to initialize before showing anything
+  if (!initialized || loading) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50'>
         <div className='text-center'>
@@ -26,7 +27,7 @@ export default function ProtectedRoute({
     );
   }
 
-  // Redirect to login if not authenticated
+  // Only redirect after we know the auth state
   if (!isAuthenticated) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
