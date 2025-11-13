@@ -77,6 +77,9 @@ const AdminDashboardPage = Loadable(
 const AdminPackagesPage = Loadable(
   lazy(() => import('@/pages/admin/AdminPackagesPage'))
 );
+const AdminPackageRegistrationPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminPackageRegistrationPage'))
+);
 const AdminShipmentsPage = Loadable(
   lazy(() => import('@/pages/admin/AdminShipmentsPage'))
 );
@@ -225,6 +228,14 @@ export default function Router() {
       element: (
         <ProtectedRoute requireAdmin>
           <AdminDashboardPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'admin/packages/register',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminPackageRegistrationPage />
         </ProtectedRoute>
       ),
     },

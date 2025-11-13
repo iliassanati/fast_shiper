@@ -1,4 +1,4 @@
-// client/src/lib/api.ts
+// client/src/lib/api.ts - FIXED VERSION
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:1337/api';
@@ -9,13 +9,17 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 seconds
+  //  timeout: 30000, // 30 seconds
 });
 
-// Request interceptor - Add auth token
+// Request interceptor - Add auth token (FIXED TO SUPPORT BOTH USER AND ADMIN TOKENS)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth-token');
+    // Check for admin token first, then user token
+    const adminToken = localStorage.getItem('admin-token');
+    const userToken = localStorage.getItem('auth-token');
+    const token = adminToken || userToken;
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -41,14 +45,31 @@ api.interceptors.response.use(
 
       // Handle 401 Unauthorized - clear auth and redirect to login
       if (status === 401) {
-        localStorage.removeItem('auth-token');
-        // Clear auth store
-        const { useAuthStore } = require('@/stores');
-        useAuthStore.getState().logout();
+        // Check which token failed and clear appropriately
+        const adminToken = localStorage.getItem('admin-token');
+        const userToken = localStorage.getItem('auth-token');
 
-        // Redirect to login
-        if (window.location.pathname !== '/auth/login') {
-          window.location.href = '/auth/login';
+        if (adminToken) {
+          // Admin token failed
+          localStorage.removeItem('admin-token');
+          const { useAdminAuthStore } = require('@/stores/useAdminAuthStore');
+          useAdminAuthStore.getState().logout();
+
+          if (
+            window.location.pathname.startsWith('/admin') &&
+            window.location.pathname !== '/admin/login'
+          ) {
+            window.location.href = '/admin/login';
+          }
+        } else if (userToken) {
+          // User token failed
+          localStorage.removeItem('auth-token');
+          const { useAuthStore } = require('@/stores');
+          useAuthStore.getState().logout();
+
+          if (window.location.pathname !== '/auth/login') {
+            window.location.href = '/auth/login';
+          }
         }
       }
 
