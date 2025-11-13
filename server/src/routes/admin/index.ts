@@ -1,12 +1,10 @@
 // server/src/routes/admin/index.ts
 import { Router } from 'express';
-import adminAuthRoutes from './adminAuthRoutes';
-import adminDashboardRoutes from './adminDashboardRoutes';
-import adminPackageRoutes from './adminPackageRoutes';
-// import adminUserRoutes from './adminUserRoutes.js';
-// import adminShipmentRoutes from './adminShipmentRoutes.js';
-// import adminConsolidationRoutes from './adminConsolidationRoutes.js';
-// import adminTransactionRoutes from './adminTransactionRoutes.js';
+import adminAuthRoutes from './adminAuthRoutes.js';
+import adminDashboardRoutes from './adminDashboardRoutes.js';
+import adminPackageRoutes from './adminPackageRoutes.js';
+import adminConsolidationRoutes from './adminConsolidationRoutes.js';
+import adminShipmentRoutes from './adminShipmentRoutes.js';
 
 const router = Router();
 
@@ -17,9 +15,7 @@ const router = Router();
 router.use('/auth', adminAuthRoutes);
 router.use('/dashboard', adminDashboardRoutes);
 router.use('/packages', adminPackageRoutes);
-// router.use('/users', adminUserRoutes);
-// router.use('/shipments', adminShipmentRoutes);
-// router.use('/consolidations', adminConsolidationRoutes);
-// router.use('/transactions', adminTransactionRoutes);
+router.use('/consolidations', adminConsolidationRoutes);
+router.use('/shipments', adminShipmentRoutes);
 
 export default router;

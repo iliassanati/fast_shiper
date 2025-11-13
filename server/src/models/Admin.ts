@@ -7,8 +7,6 @@ export interface IAdmin {
   name: string;
   email: string;
   password: string;
-  role: 'super_admin' | 'admin' | 'warehouse_staff' | 'customer_support';
-  permissions: string[];
   isActive: boolean;
   lastLogin: Date | null;
   createdAt: Date;
@@ -17,7 +15,6 @@ export interface IAdmin {
 
 export interface IAdminDocument extends Omit<IAdmin, '_id'>, Document {
   comparePassword(candidatePassword: string): Promise<boolean>;
-  hasPermission(permission: string): boolean;
 }
 
 const adminSchema = new Schema<IAdminDocument>(
@@ -40,16 +37,6 @@ const adminSchema = new Schema<IAdminDocument>(
       required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters'],
       select: false,
-    },
-    role: {
-      type: String,
-      enum: ['super_admin', 'admin', 'warehouse_staff', 'customer_support'],
-      default: 'admin',
-      required: true,
-    },
-    permissions: {
-      type: [String],
-      default: [],
     },
     isActive: {
       type: Boolean,
@@ -96,51 +83,6 @@ adminSchema.methods.comparePassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to check permissions
-adminSchema.methods.hasPermission = function (permission: string): boolean {
-  if (this.role === 'super_admin') return true;
-  return this.permissions.includes(permission);
-};
-
-// Set default permissions based on role
-adminSchema.pre('save', function (next) {
-  if (!this.isModified('role')) {
-    return next();
-  }
-
-  const rolePermissions: Record<string, string[]> = {
-    super_admin: ['*'], // All permissions
-    admin: [
-      'packages:read',
-      'packages:write',
-      'shipments:read',
-      'shipments:write',
-      'consolidations:read',
-      'consolidations:write',
-      'users:read',
-      'users:write',
-      'transactions:read',
-      'analytics:read',
-    ],
-    warehouse_staff: [
-      'packages:read',
-      'packages:write',
-      'consolidations:read',
-      'consolidations:write',
-      'shipments:read',
-    ],
-    customer_support: [
-      'packages:read',
-      'shipments:read',
-      'users:read',
-      'transactions:read',
-    ],
-  };
-
-  this.permissions = rolePermissions[this.role] || [];
-  next();
-});
-
 export const Admin = mongoose.model<IAdminDocument>('Admin', adminSchema);
 
 // Helper functions
@@ -148,7 +90,6 @@ export const createAdmin = async (adminData: {
   name: string;
   email: string;
   password: string;
-  role: IAdmin['role'];
 }): Promise<IAdminDocument> => {
   const admin = new Admin(adminData);
   await admin.save();

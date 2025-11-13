@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle,
+  Box,
 } from 'lucide-react';
 import AdminLayout from '@/layouts/AdminLayout';
 import { useAdminDashboardStore } from '@/stores/useAdminDashboardStore';
@@ -37,7 +38,7 @@ export default function AdminDashboardPage() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchStats, fetchAlerts, fetchActivities]);
 
   const statCards = [
     {
@@ -45,7 +46,7 @@ export default function AdminDashboardPage() {
       value: stats?.users.total || 0,
       icon: <Users className='w-6 h-6' />,
       gradient: 'from-blue-500 to-cyan-500',
-      change: '+12% from last month',
+      change: `+${stats?.users.newToday || 0} today`,
     },
     {
       title: 'Packages in Storage',
@@ -78,6 +79,45 @@ export default function AdminDashboardPage() {
         return <Clock className='w-5 h-5 text-orange-500' />;
       default:
         return <CheckCircle className='w-5 h-5 text-blue-500' />;
+    }
+  };
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'package':
+        return <Package className='w-5 h-5 text-blue-600' />;
+      case 'shipment':
+        return <Truck className='w-5 h-5 text-green-600' />;
+      case 'transaction':
+        return <DollarSign className='w-5 h-5 text-purple-600' />;
+      default:
+        return <Box className='w-5 h-5 text-slate-600' />;
+    }
+  };
+
+  const getActivityColor = (type: string) => {
+    switch (type) {
+      case 'package':
+        return 'bg-blue-100';
+      case 'shipment':
+        return 'bg-green-100';
+      case 'transaction':
+        return 'bg-purple-100';
+      default:
+        return 'bg-slate-100';
+    }
+  };
+
+  const formatActivityMessage = (activity: any) => {
+    switch (activity.type) {
+      case 'package':
+        return `Package ${activity.data.trackingNumber} received from ${activity.data.retailer}`;
+      case 'shipment':
+        return `Shipment ${activity.data.trackingNumber} created via ${activity.data.carrier}`;
+      case 'transaction':
+        return `${activity.data.type} transaction completed: ${activity.data.amount} ${activity.data.currency}`;
+      default:
+        return 'Activity recorded';
     }
   };
 
@@ -185,6 +225,8 @@ export default function AdminDashboardPage() {
                         className={`px-2 py-1 rounded text-xs font-bold ${
                           alert.priority === 'high'
                             ? 'bg-red-100 text-red-700'
+                            : alert.priority === 'urgent'
+                            ? 'bg-red-200 text-red-800'
                             : 'bg-orange-100 text-orange-700'
                         }`}
                       >
@@ -249,7 +291,7 @@ export default function AdminDashboardPage() {
             </div>
           ) : (
             <div className='space-y-3'>
-              {activities.slice(0, 5).map((activity, index) => (
+              {activities.slice(0, 10).map((activity, index) => (
                 <motion.div
                   key={activity.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -258,33 +300,19 @@ export default function AdminDashboardPage() {
                   className='flex items-center gap-4 p-3 hover:bg-slate-50 rounded-lg transition-colors'
                 >
                   <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      activity.type === 'package'
-                        ? 'bg-blue-100'
-                        : activity.type === 'shipment'
-                        ? 'bg-green-100'
-                        : 'bg-purple-100'
-                    }`}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${getActivityColor(
+                      activity.type
+                    )}`}
                   >
-                    {activity.type === 'package' ? (
-                      <Package className='w-5 h-5 text-blue-600' />
-                    ) : activity.type === 'shipment' ? (
-                      <Truck className='w-5 h-5 text-green-600' />
-                    ) : (
-                      <DollarSign className='w-5 h-5 text-purple-600' />
-                    )}
+                    {getActivityIcon(activity.type)}
                   </div>
                   <div className='flex-1'>
                     <p className='text-sm font-semibold text-slate-900'>
-                      {activity.type === 'package' &&
-                        `Package ${activity.data.trackingNumber} received`}
-                      {activity.type === 'shipment' &&
-                        `Shipment ${activity.data.trackingNumber} created`}
-                      {activity.type === 'transaction' &&
-                        `Transaction ${activity.data.type} completed`}
+                      {formatActivityMessage(activity)}
                     </p>
                     <p className='text-xs text-slate-500'>
-                      {new Date(activity.timestamp).toLocaleString()}
+                      {new Date(activity.timestamp).toLocaleString()} •{' '}
+                      {activity.data.userName || 'System'}
                     </p>
                   </div>
                 </motion.div>

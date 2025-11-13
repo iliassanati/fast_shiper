@@ -23,6 +23,7 @@ api.interceptors.request.use((config) => {
 interface DashboardStats {
   users: {
     total: number;
+    newToday: number;
   };
   packages: {
     total: number;
@@ -51,8 +52,8 @@ interface Alert {
 }
 
 interface Activity {
-  type: 'package' | 'shipment' | 'transaction';
   id: string;
+  type: 'package' | 'shipment' | 'transaction';
   timestamp: Date;
   data: any;
 }

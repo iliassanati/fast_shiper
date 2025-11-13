@@ -2,17 +2,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import {
-  createAdmin,
   findAdminByEmail,
   findAdminById,
   updateAdminLastLogin,
 } from '../../models/Admin.js';
 import { generateToken } from '../../utils/jwt.js';
-import {
-  sendSuccess,
-  sendError,
-  sendUnauthorized,
-} from '../../utils/responses.js';
+import { sendSuccess, sendUnauthorized } from '../../utils/responses.js';
 
 /**
  * Admin login
@@ -59,8 +54,7 @@ export const adminLogin = async (
           id: admin._id,
           name: admin.name,
           email: admin.email,
-          role: admin.role,
-          permissions: admin.permissions,
+          lastLogin: admin.lastLogin,
         },
         token,
       },
@@ -98,56 +92,9 @@ export const getAdminProfile = async (
         id: admin._id,
         name: admin.name,
         email: admin.email,
-        role: admin.role,
-        permissions: admin.permissions,
         lastLogin: admin.lastLogin,
       },
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Create new admin (super admin only)
- * POST /api/admin/auth/create
- */
-export const createNewAdmin = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { name, email, password, role } = req.body;
-
-    // Check if email already exists
-    const existingAdmin = await findAdminByEmail(email);
-    if (existingAdmin) {
-      sendError(res, 'Email already registered', 400);
-      return;
-    }
-
-    // Create admin
-    const admin = await createAdmin({
-      name,
-      email,
-      password,
-      role,
-    });
-
-    sendSuccess(
-      res,
-      {
-        admin: {
-          id: admin._id,
-          name: admin.name,
-          email: admin.email,
-          role: admin.role,
-        },
-      },
-      'Admin created successfully',
-      201
-    );
   } catch (error) {
     next(error);
   }

@@ -1,4 +1,4 @@
-// client/src/stores/useAdminAuthStore.ts - COMPLETE FIX
+// client/src/stores/useAdminAuthStore.ts
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import axios from 'axios';
@@ -24,8 +24,6 @@ interface AdminInfo {
   id: string;
   name: string;
   email: string;
-  role: 'super_admin' | 'admin' | 'warehouse_staff' | 'customer_support';
-  permissions: string[];
   lastLogin: Date | null;
 }
 
@@ -35,14 +33,12 @@ interface AdminAuthState {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  initialized: boolean; // CRITICAL: Must always have a value
+  initialized: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
-  hasPermission: (permission: string) => boolean;
-  hasRole: (...roles: string[]) => boolean;
 }
 
 export const useAdminAuthStore = create<AdminAuthState>()(
@@ -54,22 +50,9 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         isAuthenticated: false,
         loading: false,
         error: null,
-        initialized: false, // FIX: Always starts as false
+        initialized: false,
 
         clearError: () => set({ error: null }),
-
-        hasPermission: (permission: string) => {
-          const { admin } = get();
-          if (!admin) return false;
-          if (admin.role === 'super_admin') return true;
-          return admin.permissions.includes(permission);
-        },
-
-        hasRole: (...roles: string[]) => {
-          const { admin } = get();
-          if (!admin) return false;
-          return roles.includes(admin.role);
-        },
 
         login: async (email: string, password: string) => {
           set({ loading: true, error: null });
@@ -93,7 +76,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
               isAuthenticated: true,
               loading: false,
               error: null,
-              initialized: true, // FIX: Set to true after successful login
+              initialized: true,
             });
           } catch (error: any) {
             console.error('❌ Login failed:', error.response?.data);
@@ -103,7 +86,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
               error: errorMessage,
               loading: false,
               isAuthenticated: false,
-              initialized: true, // FIX: Set to true even on error
+              initialized: true,
             });
             throw new Error(errorMessage);
           }
@@ -176,22 +159,19 @@ export const useAdminAuthStore = create<AdminAuthState>()(
       }),
       {
         name: 'admin-auth-store',
-        // FIX: Only persist necessary fields, always include initialized
         partialize: (state) => ({
           admin: state.admin,
           token: state.token,
           isAuthenticated: state.isAuthenticated,
-          initialized: state.initialized, // FIX: Persist this!
-          loading: false, // FIX: Never persist loading as true
+          initialized: state.initialized,
+          loading: false,
         }),
-        // FIX: Merge stored state with defaults
         merge: (persistedState: any, currentState) => {
           return {
             ...currentState,
             ...persistedState,
-            // FIX: Ensure these always have valid values
             initialized: persistedState?.initialized ?? false,
-            loading: false, // Never start with loading true
+            loading: false,
           };
         },
       }
@@ -199,9 +179,8 @@ export const useAdminAuthStore = create<AdminAuthState>()(
   )
 );
 
-// FIX: Initialize auth check on app load
+// Initialize auth check on app load
 if (typeof window !== 'undefined') {
-  // Wait for store to hydrate, then check auth
   const initializeAuth = () => {
     const state = useAdminAuthStore.getState();
     const token = localStorage.getItem('admin-token');
@@ -212,10 +191,8 @@ if (typeof window !== 'undefined') {
     });
 
     if (token && !state.initialized) {
-      // Has token but not initialized - check auth
       useAdminAuthStore.getState().checkAuth();
     } else if (!token) {
-      // No token - mark as initialized
       useAdminAuthStore.setState({
         initialized: true,
         loading: false,
@@ -224,6 +201,5 @@ if (typeof window !== 'undefined') {
     }
   };
 
-  // Run after a brief delay to ensure store is hydrated
   setTimeout(initializeAuth, 100);
 }

@@ -1,4 +1,4 @@
-// src/types/index.ts
+// server/src/types/index.ts
 import type { Request } from 'express';
 import { Types } from 'mongoose';
 
@@ -23,16 +23,13 @@ export interface IUser {
 // Omit password for responses
 export type UserResponse = Omit<IUser, 'password'>;
 
-// Request with authenticated user
+// Request with authenticated user or admin
 export interface AuthRequest extends Request {
   user?: {
     userId: string;
     email: string;
   };
-  admin?: {
-    role: 'super_admin' | 'admin' | 'warehouse_staff' | 'customer_support';
-    permissions: string[];
-  };
+  isAdmin?: boolean; // Simple flag to indicate admin authentication
 }
 
 // Auth DTOs

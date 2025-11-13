@@ -28,13 +28,12 @@ interface MenuItem {
   label: string;
   icon: ReactNode;
   href: string;
-  permission?: string;
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { admin, logout, hasPermission } = useAdminAuthStore();
+  const { admin, logout } = useAdminAuthStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -51,35 +50,30 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       label: 'Packages',
       icon: <Package className='w-5 h-5' />,
       href: '/admin/packages',
-      permission: 'packages:read',
     },
     {
       id: 'shipments',
       label: 'Shipments',
       icon: <Truck className='w-5 h-5' />,
       href: '/admin/shipments',
-      permission: 'shipments:read',
     },
     {
       id: 'consolidations',
       label: 'Consolidations',
       icon: <Box className='w-5 h-5' />,
       href: '/admin/consolidations',
-      permission: 'consolidations:read',
     },
     {
       id: 'users',
       label: 'Users',
       icon: <Users className='w-5 h-5' />,
       href: '/admin/users',
-      permission: 'users:read',
     },
     {
       id: 'transactions',
       label: 'Transactions',
       icon: <DollarSign className='w-5 h-5' />,
       href: '/admin/transactions',
-      permission: 'transactions:read',
     },
     {
       id: 'settings',
@@ -88,11 +82,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: '/admin/settings',
     },
   ];
-
-  const filteredMenuItems = menuItems.filter((item) => {
-    if (!item.permission) return true;
-    return hasPermission(item.permission);
-  });
 
   const isActivePath = (href: string) => {
     return (
@@ -124,7 +113,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   <Shield className='w-6 h-6 text-white' />
                 </div>
                 <div>
-                  <h2 className='font-bold text-white'>Admin</h2>
+                  <h2 className='font-bold text-white'>Admin Panel</h2>
                   <p className='text-xs text-blue-300'>Fast Shipper</p>
                 </div>
               </div>
@@ -151,9 +140,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </div>
               <div className='flex-1'>
                 <p className='font-bold text-white text-sm'>{admin.name}</p>
-                <p className='text-xs text-blue-300 capitalize'>
-                  {admin.role.replace('_', ' ')}
-                </p>
+                <p className='text-xs text-blue-300'>Administrator</p>
               </div>
             </div>
           </div>
@@ -161,7 +148,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Navigation */}
         <nav className='p-4 space-y-2 flex-1 overflow-y-auto'>
-          {filteredMenuItems.map((item) => (
+          {menuItems.map((item) => (
             <motion.button
               key={item.id}
               onClick={() => navigate(item.href)}

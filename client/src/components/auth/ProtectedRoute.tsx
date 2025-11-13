@@ -3,20 +3,20 @@ import { useAuthStore } from '@/stores';
 import { useAdminAuthStore } from '@/stores/useAdminAuthStore';
 import LoadingScreen from '../common/LoadingScreen';
 import { Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   redirectTo?: string;
-  requireAdmin?: boolean; // Add this
+  requireAdmin?: boolean;
 }
 
 export default function ProtectedRoute({
   children,
   redirectTo = '/auth/login',
-  requireAdmin = false, // Add this
+  requireAdmin = false,
 }: ProtectedRouteProps) {
   const clientAuth = useAuthStore();
-
   const adminAuth = useAdminAuthStore();
 
   // Use admin auth if requireAdmin is true
@@ -26,8 +26,8 @@ export default function ProtectedRoute({
 
   const loginPath = requireAdmin ? '/admin/login' : '/auth/login';
 
-  // Wait for initialization
-  if (!loading) {
+  // ✅ FIXED: Wait for initialization (was: if (!loading) which is wrong)
+  if (loading || !initialized) {
     return <LoadingScreen />;
   }
 

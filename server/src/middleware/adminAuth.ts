@@ -3,7 +3,7 @@ import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../types/index.js';
 import { verifyToken } from '../utils/jwt.js';
 import { findAdminById } from '../models/Admin.js';
-import { sendUnauthorized, sendForbidden } from '../utils/responses.js';
+import { sendUnauthorized } from '../utils/responses.js';
 
 /**
  * Admin authentication middleware
@@ -47,81 +47,11 @@ export const authenticateAdmin = async (
       email: decoded.email,
     };
 
-    // Attach admin role and permissions
-    req.admin = {
-      role: admin.role,
-      permissions: admin.permissions,
-    };
+    // Mark as admin request
+    req.isAdmin = true;
 
     next();
   } catch (error) {
     sendUnauthorized(res, 'Authentication failed');
   }
-};
-
-/**
- * Permission check middleware factory
- * Creates middleware that checks if admin has required permission
- */
-export const requirePermission = (permission: string) => {
-  return async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      if (!req.admin) {
-        sendUnauthorized(res, 'Admin authentication required');
-        return;
-      }
-
-      // Super admin has all permissions
-      if (req.admin.role === 'super_admin') {
-        next();
-        return;
-      }
-
-      // Check if admin has the required permission
-      if (!req.admin.permissions.includes(permission)) {
-        sendForbidden(res, `Permission denied. Required: ${permission}`);
-        return;
-      }
-
-      next();
-    } catch (error) {
-      sendForbidden(res, 'Permission check failed');
-    }
-  };
-};
-
-/**
- * Role check middleware factory
- * Creates middleware that checks if admin has required role
- */
-export const requireRole = (...roles: string[]) => {
-  return async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      if (!req.admin) {
-        sendUnauthorized(res, 'Admin authentication required');
-        return;
-      }
-
-      // Check if admin has one of the required roles
-      if (!roles.includes(req.admin.role)) {
-        sendForbidden(
-          res,
-          `Access denied. Required roles: ${roles.join(', ')}`
-        );
-        return;
-      }
-
-      next();
-    } catch (error) {
-      sendForbidden(res, 'Role check failed');
-    }
-  };
 };

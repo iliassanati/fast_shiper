@@ -6,7 +6,7 @@ import {
   createPackage,
   findPackageById,
 } from '../../models/Package.js';
-import { findUserById } from '../../models/User.js';
+import { User } from '../../models/User.js';
 import { createNotification } from '../../models/Notification.js';
 import {
   sendSuccess,
@@ -25,7 +25,7 @@ export const getAllPackages = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
@@ -95,7 +95,7 @@ export const registerPackage = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
@@ -112,7 +112,7 @@ export const registerPackage = async (
     } = req.body;
 
     // Find user by suite number
-    const user = await findUserById(suiteNumber);
+    const user = await User.findOne({ suiteNumber });
 
     if (!user) {
       sendNotFound(res, 'User not found with this suite number');
@@ -170,7 +170,7 @@ export const updatePackageDetails = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
@@ -219,7 +219,7 @@ export const uploadPackagePhotos = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
@@ -245,7 +245,7 @@ export const uploadPackagePhotos = async (
 
     await pkg.save();
 
-    // Notify user if they requested photos
+    // Notify user
     await createNotification({
       userId: pkg.userId,
       type: 'package_received',
@@ -273,7 +273,7 @@ export const getPackageStatistics = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
@@ -345,7 +345,7 @@ export const bulkUpdatePackages = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.admin) {
+    if (!req.isAdmin) {
       sendForbidden(res);
       return;
     }
