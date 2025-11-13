@@ -74,6 +74,18 @@ const AdminLoginPage = Loadable(
 const AdminDashboardPage = Loadable(
   lazy(() => import('@/pages/admin/AdminDashboardPage'))
 );
+const AdminPackagesPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminPackagesPage'))
+);
+const AdminShipmentsPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminShipmentsPage'))
+);
+const AdminConsolidationsPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminConsolidationsPage'))
+);
+const AdminUsersPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminUsersPage'))
+);
 
 // -------------------------------------------------------------------------
 // ROUTER CONFIGURATION
@@ -210,6 +222,54 @@ export default function Router() {
         </ProtectedRoute>
       ),
     },
+    {
+      path: 'admin/packages',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminPackagesPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'admin/shipments',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminShipmentsPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'admin/consolidations',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminConsolidationsPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'admin/users',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminUsersPage />
+        </ProtectedRoute>
+      ),
+    },
+    // {
+    //   path: 'admin/transactions',
+    //   element: (
+    //     <ProtectedRoute requireAdmin>
+    //       <AdminTransactionsPage />
+    //     </ProtectedRoute>
+    //   ),
+    // },
+    // {
+    //   path: 'admin/settings',
+    //   element: (
+    //     <ProtectedRoute requireAdmin>
+    //       <AdminSettingsPage />
+    //     </ProtectedRoute>
+    //   ),
+    // },
 
     // ==================== 404 NOT FOUND ====================
     {

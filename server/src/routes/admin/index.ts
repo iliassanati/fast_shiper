@@ -5,6 +5,7 @@ import adminDashboardRoutes from './adminDashboardRoutes.js';
 import adminPackageRoutes from './adminPackageRoutes.js';
 import adminConsolidationRoutes from './adminConsolidationRoutes.js';
 import adminShipmentRoutes from './adminShipmentRoutes.js';
+import adminUserRoutes from './adminUserRoutes.js';
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use('/dashboard', adminDashboardRoutes);
 router.use('/packages', adminPackageRoutes);
 router.use('/consolidations', adminConsolidationRoutes);
 router.use('/shipments', adminShipmentRoutes);
+router.use('/users', adminUserRoutes);
 
 export default router;
