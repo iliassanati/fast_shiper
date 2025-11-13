@@ -86,6 +86,12 @@ const AdminConsolidationsPage = Loadable(
 const AdminUsersPage = Loadable(
   lazy(() => import('@/pages/admin/AdminUsersPage'))
 );
+const AdminTransactionsPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminTransactionsPage'))
+);
+// const AdminSettingsPage = Loadable(
+//   lazy(() => import('@/pages/admin/AdminSettingsPage'))
+// );
 
 // -------------------------------------------------------------------------
 // ROUTER CONFIGURATION
@@ -254,14 +260,14 @@ export default function Router() {
         </ProtectedRoute>
       ),
     },
-    // {
-    //   path: 'admin/transactions',
-    //   element: (
-    //     <ProtectedRoute requireAdmin>
-    //       <AdminTransactionsPage />
-    //     </ProtectedRoute>
-    //   ),
-    // },
+    {
+      path: 'admin/transactions',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminTransactionsPage />
+        </ProtectedRoute>
+      ),
+    },
     // {
     //   path: 'admin/settings',
     //   element: (

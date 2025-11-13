@@ -1,4 +1,5 @@
-// src/routes/index.ts
+// server/src/routes/index.ts
+// UPDATED VERSION - Include tickets
 import { Router } from 'express';
 import authRoutes from './authRoutes.js';
 import packageRoutes from './packageRoutes.js';
@@ -6,6 +7,7 @@ import shipmentRoutes from './shipmentRoutes.js';
 import consolidationRoutes from './consolidationRoutes.js';
 import photoRequestRoutes from './photoRequestRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import ticketRoutes from './ticketRoutes.js'; // NEW
 import adminRoutes from './admin/index.js';
 
 const router = Router();
@@ -30,6 +32,7 @@ router.use('/shipments', shipmentRoutes);
 router.use('/consolidations', consolidationRoutes);
 router.use('/photo-requests', photoRequestRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/tickets', ticketRoutes); // NEW
 router.use('/admin', adminRoutes);
 
 export default router;
