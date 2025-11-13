@@ -25,6 +25,7 @@ export default function PackagesPage() {
     togglePackageSelection,
     clearSelection,
   } = usePackageStore();
+  console.log('🚀 ~ PackagesPage ~ packages:', packages);
   const { addNotification } = useNotificationStore();
 
   // Local state

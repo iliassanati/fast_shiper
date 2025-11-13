@@ -10,8 +10,9 @@ interface PackageState {
   loading: boolean;
   error: string | null;
   filterStatus: PackageStatus | 'all';
+  initialized: boolean;
 
-  // Getters (computed values)
+  // Getters
   getPackageById: (id: string) => Package | undefined;
   getSelectedPackages: () => Package[];
   getPackagesByStatus: (status: PackageStatus) => Package[];
@@ -32,15 +33,21 @@ interface PackageState {
   }) => Promise<void>;
   fetchPackageById: (id: string) => Promise<Package>;
   deletePackage: (id: string) => Promise<void>;
+  reset: () => void;
 }
+
+const initialState = {
+  packages: [],
+  selectedPackageIds: [],
+  loading: false,
+  error: null,
+  filterStatus: 'all' as PackageStatus | 'all',
+  initialized: false,
+};
 
 export const usePackageStore = create<PackageState>()(
   devtools((set, get) => ({
-    packages: [],
-    selectedPackageIds: [],
-    loading: false,
-    error: null,
-    filterStatus: 'all',
+    ...initialState,
 
     // Getters
     getPackageById: (id) => {
@@ -57,11 +64,11 @@ export const usePackageStore = create<PackageState>()(
     },
 
     // Actions
-    setPackages: (packages) => set({ packages }),
+    setPackages: (packages) => set({ packages, initialized: true }),
 
     addPackage: (pkg) =>
       set((state) => ({
-        packages: [...state.packages, pkg],
+        packages: [pkg, ...state.packages],
       })),
 
     updatePackage: (id, updates) =>
@@ -100,30 +107,61 @@ export const usePackageStore = create<PackageState>()(
           pagination: any;
         }>('/packages', filters);
 
-        set({ packages: response.packages, loading: false });
+        // Transform backend data to frontend format
+        const packages = response.packages.map((pkg: any) => ({
+          id: pkg._id || pkg.id,
+          description: pkg.description,
+          retailer: pkg.retailer,
+          trackingNumber: pkg.trackingNumber,
+          weight: `${pkg.weight.value}`,
+          dimensions: `${pkg.dimensions.length}x${pkg.dimensions.width}x${pkg.dimensions.height}`,
+          photo: getEmojiForRetailer(pkg.retailer),
+          receivedDate: new Date(pkg.receivedDate).toISOString().split('T')[0],
+          storageDay: pkg.storageDay,
+          status: pkg.status,
+          estimatedValue: `$${pkg.estimatedValue.amount}`,
+        }));
+
+        set({ packages, loading: false, initialized: true });
       } catch (error: any) {
+        console.error('Error fetching packages:', error);
         set({
-          error: error.message || 'Failed to fetch packages',
+          error: error.response?.data?.error || 'Failed to fetch packages',
           loading: false,
+          initialized: true,
         });
-        throw error;
       }
     },
 
     fetchPackageById: async (id: string) => {
       set({ loading: true, error: null });
       try {
-        const response = await apiHelpers.get<{ package: Package }>(
+        const response = await apiHelpers.get<{ package: any }>(
           `/packages/${id}`
         );
 
+        const pkg = response.package;
+        const transformedPkg: Package = {
+          id: pkg._id || pkg.id,
+          description: pkg.description,
+          retailer: pkg.retailer,
+          trackingNumber: pkg.trackingNumber,
+          weight: `${pkg.weight.value}`,
+          dimensions: `${pkg.dimensions.length}x${pkg.dimensions.width}x${pkg.dimensions.height}`,
+          photo: getEmojiForRetailer(pkg.retailer),
+          receivedDate: new Date(pkg.receivedDate).toISOString().split('T')[0],
+          storageDay: pkg.storageDay,
+          status: pkg.status,
+          estimatedValue: `$${pkg.estimatedValue.amount}`,
+        };
+
         // Update the package in the store
-        get().updatePackage(id, response.package);
+        get().updatePackage(id, transformedPkg);
         set({ loading: false });
-        return response.package;
+        return transformedPkg;
       } catch (error: any) {
         set({
-          error: error.message || 'Failed to fetch package',
+          error: error.response?.data?.error || 'Failed to fetch package',
           loading: false,
         });
         throw error;
@@ -138,11 +176,29 @@ export const usePackageStore = create<PackageState>()(
         set({ loading: false });
       } catch (error: any) {
         set({
-          error: error.message || 'Failed to delete package',
+          error: error.response?.data?.error || 'Failed to delete package',
           loading: false,
         });
         throw error;
       }
     },
+
+    reset: () => set(initialState),
   }))
 );
+
+// Helper function to get emoji for retailer
+function getEmojiForRetailer(retailer: string): string {
+  const emojiMap: Record<string, string> = {
+    Amazon: '📦',
+    eBay: '🛒',
+    'Best Buy': '🖥️',
+    Walmart: '🏪',
+    Target: '🎯',
+    Nike: '👟',
+    Adidas: '👟',
+    Apple: '🍎',
+  };
+
+  return emojiMap[retailer] || '📦';
+}

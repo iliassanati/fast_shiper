@@ -8,6 +8,7 @@ interface ShipmentState {
   shipments: Shipment[];
   loading: boolean;
   error: string | null;
+  initialized: boolean;
 
   // Getters
   getShipmentById: (id: string) => Shipment | undefined;
@@ -30,13 +31,19 @@ interface ShipmentState {
     status: ShipmentStatus,
     trackingEvent?: any
   ) => Promise<void>;
+  reset: () => void;
 }
+
+const initialState = {
+  shipments: [],
+  loading: false,
+  error: null,
+  initialized: false,
+};
 
 export const useShipmentStore = create<ShipmentState>()(
   devtools((set, get) => ({
-    shipments: [],
-    loading: false,
-    error: null,
+    ...initialState,
 
     // Getters
     getShipmentById: (id) => {
@@ -57,11 +64,11 @@ export const useShipmentStore = create<ShipmentState>()(
     },
 
     // Actions
-    setShipments: (shipments) => set({ shipments }),
+    setShipments: (shipments) => set({ shipments, initialized: true }),
 
     addShipment: (shipment) =>
       set((state) => ({
-        shipments: [...state.shipments, shipment],
+        shipments: [shipment, ...state.shipments],
       })),
 
     updateShipment: (id, updates) =>
@@ -75,34 +82,74 @@ export const useShipmentStore = create<ShipmentState>()(
       set({ loading: true, error: null });
       try {
         const response = await apiHelpers.get<{
-          shipments: Shipment[];
+          shipments: any[];
           pagination: any;
         }>('/shipments', filters);
 
-        set({ shipments: response.shipments, loading: false });
+        // Transform backend data to frontend format
+        const shipments = response.shipments.map((s: any) => ({
+          id: s._id || s.id,
+          trackingNumber: s.trackingNumber,
+          carrier: s.carrier,
+          status: s.status,
+          shippedDate: s.shippedDate
+            ? new Date(s.shippedDate).toISOString().split('T')[0]
+            : null,
+          estimatedDelivery: new Date(s.estimatedDelivery)
+            .toISOString()
+            .split('T')[0],
+          deliveredDate: s.actualDelivery
+            ? new Date(s.actualDelivery).toISOString().split('T')[0]
+            : null,
+          destination: s.destination.city,
+          packages: s.packageIds.length,
+          cost: `${s.cost.total} ${s.cost.currency}`,
+        }));
+
+        set({ shipments, loading: false, initialized: true });
       } catch (error: any) {
+        console.error('Error fetching shipments:', error);
         set({
-          error: error.message || 'Failed to fetch shipments',
+          error: error.response?.data?.error || 'Failed to fetch shipments',
           loading: false,
+          initialized: true,
         });
-        throw error;
       }
     },
 
     fetchShipmentById: async (id: string) => {
       set({ loading: true, error: null });
       try {
-        const response = await apiHelpers.get<{ shipment: Shipment }>(
+        const response = await apiHelpers.get<{ shipment: any }>(
           `/shipments/${id}`
         );
 
-        // Update the shipment in the store
-        get().updateShipment(id, response.shipment);
+        const s = response.shipment;
+        const transformedShipment: Shipment = {
+          id: s._id || s.id,
+          trackingNumber: s.trackingNumber,
+          carrier: s.carrier,
+          status: s.status,
+          shippedDate: s.shippedDate
+            ? new Date(s.shippedDate).toISOString().split('T')[0]
+            : null,
+          estimatedDelivery: new Date(s.estimatedDelivery)
+            .toISOString()
+            .split('T')[0],
+          deliveredDate: s.actualDelivery
+            ? new Date(s.actualDelivery).toISOString().split('T')[0]
+            : null,
+          destination: s.destination.city,
+          packages: s.packageIds.length,
+          cost: `${s.cost.total} ${s.cost.currency}`,
+        };
+
+        get().updateShipment(id, transformedShipment);
         set({ loading: false });
-        return response.shipment;
+        return transformedShipment;
       } catch (error: any) {
         set({
-          error: error.message || 'Failed to fetch shipment',
+          error: error.response?.data?.error || 'Failed to fetch shipment',
           loading: false,
         });
         throw error;
@@ -112,17 +159,37 @@ export const useShipmentStore = create<ShipmentState>()(
     createShipment: async (shipmentData: any) => {
       set({ loading: true, error: null });
       try {
-        const response = await apiHelpers.post<{ shipment: Shipment }>(
+        const response = await apiHelpers.post<{ shipment: any }>(
           '/shipments',
           shipmentData
         );
 
-        get().addShipment(response.shipment);
+        const s = response.shipment;
+        const transformedShipment: Shipment = {
+          id: s._id || s.id,
+          trackingNumber: s.trackingNumber,
+          carrier: s.carrier,
+          status: s.status,
+          shippedDate: s.shippedDate
+            ? new Date(s.shippedDate).toISOString().split('T')[0]
+            : null,
+          estimatedDelivery: new Date(s.estimatedDelivery)
+            .toISOString()
+            .split('T')[0],
+          deliveredDate: s.actualDelivery
+            ? new Date(s.actualDelivery).toISOString().split('T')[0]
+            : null,
+          destination: s.destination.city,
+          packages: s.packageIds.length,
+          cost: `${s.cost.total} ${s.cost.currency}`,
+        };
+
+        get().addShipment(transformedShipment);
         set({ loading: false });
-        return response.shipment;
+        return transformedShipment;
       } catch (error: any) {
         set({
-          error: error.message || 'Failed to create shipment',
+          error: error.response?.data?.error || 'Failed to create shipment',
           loading: false,
         });
         throw error;
@@ -136,20 +203,34 @@ export const useShipmentStore = create<ShipmentState>()(
     ) => {
       set({ loading: true, error: null });
       try {
-        const response = await apiHelpers.put<{ shipment: Shipment }>(
+        const response = await apiHelpers.put<{ shipment: any }>(
           `/shipments/${id}/status`,
           { status, trackingEvent }
         );
 
-        get().updateShipment(id, response.shipment);
+        const s = response.shipment;
+        const transformedShipment: Partial<Shipment> = {
+          status: s.status,
+          shippedDate: s.shippedDate
+            ? new Date(s.shippedDate).toISOString().split('T')[0]
+            : null,
+          deliveredDate: s.actualDelivery
+            ? new Date(s.actualDelivery).toISOString().split('T')[0]
+            : null,
+        };
+
+        get().updateShipment(id, transformedShipment);
         set({ loading: false });
       } catch (error: any) {
         set({
-          error: error.message || 'Failed to update shipment status',
+          error:
+            error.response?.data?.error || 'Failed to update shipment status',
           loading: false,
         });
         throw error;
       }
     },
+
+    reset: () => set(initialState),
   }))
 );
