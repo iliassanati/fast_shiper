@@ -29,6 +29,10 @@ export interface AuthRequest extends Request {
     userId: string;
     email: string;
   };
+  admin?: {
+    role: 'super_admin' | 'admin' | 'warehouse_staff' | 'customer_support';
+    permissions: string[];
+  };
 }
 
 // Auth DTOs

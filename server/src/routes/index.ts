@@ -6,6 +6,7 @@ import shipmentRoutes from './shipmentRoutes.js';
 import consolidationRoutes from './consolidationRoutes.js';
 import photoRequestRoutes from './photoRequestRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import adminRoutes from './admin/index.js';
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.use('/shipments', shipmentRoutes);
 router.use('/consolidations', consolidationRoutes);
 router.use('/photo-requests', photoRequestRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

@@ -1,35 +1,39 @@
-// client/src/components/auth/ProtectedRoute.tsx - FIXED
-import { Navigate, useLocation } from 'react-router-dom';
+// client/src/components/auth/ProtectedRoute.tsx
 import { useAuthStore } from '@/stores';
-import type { ReactNode } from 'react';
+import { useAdminAuthStore } from '@/stores/useAdminAuthStore';
+import LoadingScreen from '../common/LoadingScreen';
+import { Navigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   redirectTo?: string;
+  requireAdmin?: boolean; // Add this
 }
 
 export default function ProtectedRoute({
   children,
   redirectTo = '/auth/login',
+  requireAdmin = false, // Add this
 }: ProtectedRouteProps) {
-  const { isAuthenticated, loading, initialized } = useAuthStore();
-  const location = useLocation();
+  const clientAuth = useAuthStore();
 
-  // FIX: Wait for auth to initialize before showing anything
-  if (!initialized || loading) {
-    return (
-      <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50'>
-        <div className='text-center'>
-          <div className='w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4'></div>
-          <p className='text-slate-600 font-semibold'>Loading...</p>
-        </div>
-      </div>
-    );
+  const adminAuth = useAdminAuthStore();
+
+  // Use admin auth if requireAdmin is true
+  const { isAuthenticated, loading, initialized } = requireAdmin
+    ? adminAuth
+    : clientAuth;
+
+  const loginPath = requireAdmin ? '/admin/login' : '/auth/login';
+
+  // Wait for initialization
+  if (!loading) {
+    return <LoadingScreen />;
   }
 
-  // Only redirect after we know the auth state
+  // Redirect if not authenticated
   if (!isAuthenticated) {
-    return <Navigate to={redirectTo} state={{ from: location }} replace />;
+    return <Navigate to={loginPath} replace />;
   }
 
   return <>{children}</>;

@@ -67,6 +67,14 @@ const ShippingPage = Loadable(
   lazy(() => import('@/pages/client/ShippingPage'))
 );
 
+// Admin Pages
+const AdminLoginPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminLoginPage'))
+);
+const AdminDashboardPage = Loadable(
+  lazy(() => import('@/pages/admin/AdminDashboardPage'))
+);
+
 // -------------------------------------------------------------------------
 // ROUTER CONFIGURATION
 // -------------------------------------------------------------------------
@@ -186,6 +194,20 @@ export default function Router() {
       path: 'loading',
       element: (
         <LoadingScreen loadingText='Loading page...' minDisplayTime={500} />
+      ),
+    },
+
+    // ==================== ADMIN ====================
+    {
+      path: 'admin/login',
+      element: <AdminLoginPage />,
+    },
+    {
+      path: 'admin/dashboard',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminDashboardPage />
+        </ProtectedRoute>
       ),
     },
 
