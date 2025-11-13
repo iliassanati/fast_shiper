@@ -1,4 +1,4 @@
-// server/src/controllers/admin/adminPackageController.ts
+// server/src/controllers/admin/adminPackageController.ts - FIXED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import {
@@ -6,6 +6,7 @@ import {
   createPackage,
   findPackageById,
 } from '../../models/Package.js';
+import { Consolidation } from '../../models/Consolidation.js';
 import { User } from '../../models/User.js';
 import { createNotification } from '../../models/Notification.js';
 import {
@@ -64,6 +65,7 @@ export const getAllPackages = async (
 
     const packages = await Package.find(query)
       .populate('userId', 'name email suiteNumber')
+      .populate('consolidationId')
       .sort({ receivedDate: -1 })
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
@@ -161,7 +163,7 @@ export const registerPackage = async (
 };
 
 /**
- * Update package details
+ * Update package details - FIXED VERSION WITH CONSOLIDATION HANDLING
  * PUT /api/admin/packages/:id
  */
 export const updatePackageDetails = async (
@@ -178,12 +180,14 @@ export const updatePackageDetails = async (
     const { id } = req.params;
     const updates = req.body;
 
-    const pkg = await findPackageById(id);
+    const pkg = await Package.findById(id).populate('userId');
 
     if (!pkg) {
       sendNotFound(res, 'Package not found');
       return;
     }
+
+    const oldStatus = pkg.status;
 
     // Update allowed fields
     const allowedUpdates = [
@@ -203,7 +207,119 @@ export const updatePackageDetails = async (
 
     await pkg.save();
 
-    sendSuccess(res, { package: pkg }, 'Package updated successfully');
+    // 🔥 NEW: Handle consolidation status change
+    if (updates.status === 'consolidated' && oldStatus !== 'consolidated') {
+      console.log(`📦 Package ${id} marked as consolidated`);
+
+      // Check if package already has a consolidation
+      if (!pkg.consolidationId) {
+        console.log(
+          '⚠️ Package has no consolidation ID - creating a consolidation record'
+        );
+
+        // Find or create a consolidation for this package
+        // Option 1: Find existing pending consolidation for this user with this package
+        let consolidation = await Consolidation.findOne({
+          userId: pkg.userId,
+          packageIds: pkg._id,
+          status: { $in: ['pending', 'processing'] },
+        });
+
+        // Option 2: If no existing consolidation, check if user has any pending consolidation requests
+        if (!consolidation) {
+          consolidation = await Consolidation.findOne({
+            userId: pkg.userId,
+            status: 'pending',
+          });
+
+          // Add this package to the existing consolidation if found
+          if (consolidation && !consolidation.packageIds.includes(pkg._id)) {
+            consolidation.packageIds.push(pkg._id as any);
+            await consolidation.save();
+            console.log(
+              `✅ Added package to existing consolidation: ${consolidation._id}`
+            );
+          }
+        }
+
+        // Option 3: If still no consolidation, create a new one (admin-initiated)
+        if (!consolidation) {
+          const totalWeight = pkg.weight.value;
+          const totalVolume =
+            pkg.dimensions.length *
+            pkg.dimensions.width *
+            pkg.dimensions.height;
+
+          consolidation = new Consolidation({
+            userId: pkg.userId,
+            packageIds: [pkg._id],
+            status: 'processing', // Admin-initiated, so start as processing
+            preferences: {
+              removePackaging: true,
+              addProtection: false,
+              requestUnpackedPhotos: false,
+            },
+            specialInstructions: 'Admin-initiated consolidation',
+            estimatedCompletion: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
+            cost: {
+              base: 25,
+              protection: 0,
+              photos: 0,
+              total: 25,
+              currency: 'MAD',
+            },
+            beforeConsolidation: {
+              totalWeight,
+              totalVolume,
+            },
+            afterConsolidation: {
+              weight: null,
+              dimensions: {
+                length: null,
+                width: null,
+                height: null,
+              },
+            },
+            photos: [],
+            notes: `Admin-initiated consolidation for package ${pkg.trackingNumber}`,
+          });
+
+          await consolidation.save();
+          console.log(`✅ Created new consolidation: ${consolidation._id}`);
+        }
+
+        // Link package to consolidation
+        pkg.consolidationId = consolidation._id as any;
+        await pkg.save();
+
+        // Notify user
+        await createNotification({
+          userId: pkg.userId,
+          type: 'consolidation_complete',
+          title: 'Package Consolidated',
+          message: `Your package ${pkg.trackingNumber} has been marked for consolidation.`,
+          relatedId: consolidation._id,
+          relatedModel: 'Consolidation',
+          priority: 'normal',
+          actionUrl: `/consolidations/${consolidation._id}`,
+        });
+      } else {
+        console.log(
+          `✅ Package already linked to consolidation: ${pkg.consolidationId}`
+        );
+      }
+    }
+
+    // Reload package with consolidation data
+    const updatedPackage = await Package.findById(id)
+      .populate('userId', 'name email suiteNumber')
+      .populate('consolidationId');
+
+    sendSuccess(
+      res,
+      { package: updatedPackage },
+      'Package updated successfully'
+    );
   } catch (error) {
     next(error);
   }
@@ -392,7 +508,9 @@ export const getPackageDetails = async (
     }
 
     const { id } = req.params;
-    const pkg = await findPackageById(id);
+    const pkg = await Package.findById(id)
+      .populate('userId', 'name email suiteNumber')
+      .populate('consolidationId');
 
     if (!pkg) {
       sendNotFound(res, 'Package not found');

@@ -1,4 +1,4 @@
-// client/src/stores/useAdminDashboardStore.ts
+// client/src/stores/useAdminDashboardStore.ts - FIXED VERSION
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import axios from 'axios';
@@ -74,12 +74,14 @@ interface AdminDashboardState {
   analytics: AnalyticsData | null;
   loading: boolean;
   error: string | null;
+  lastRefresh: Date | null;
 
   fetchStats: () => Promise<void>;
   fetchAlerts: () => Promise<void>;
   fetchActivities: (limit?: number) => Promise<void>;
   fetchAnalytics: (period?: string) => Promise<void>;
   refreshDashboard: () => Promise<void>;
+  forceRefresh: () => Promise<void>; // NEW: Force immediate refresh
 }
 
 export const useAdminDashboardStore = create<AdminDashboardState>()(
@@ -90,6 +92,7 @@ export const useAdminDashboardStore = create<AdminDashboardState>()(
     analytics: null,
     loading: false,
     error: null,
+    lastRefresh: null,
 
     fetchStats: async () => {
       set({ loading: true, error: null });
@@ -98,6 +101,7 @@ export const useAdminDashboardStore = create<AdminDashboardState>()(
         set({
           stats: response.data.data.stats,
           loading: false,
+          lastRefresh: new Date(),
         });
       } catch (error: any) {
         set({
@@ -145,6 +149,14 @@ export const useAdminDashboardStore = create<AdminDashboardState>()(
         get().fetchActivities(),
         get().fetchAnalytics(),
       ]);
+    },
+
+    // NEW: Force refresh without debouncing
+    forceRefresh: async () => {
+      console.log('🔄 Force refreshing dashboard...');
+      set({ loading: true });
+      await get().refreshDashboard();
+      set({ loading: false, lastRefresh: new Date() });
     },
   }))
 );

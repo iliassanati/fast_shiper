@@ -53,7 +53,7 @@ export default function AdminDashboardPage() {
       value: stats?.packages.inStorage || 0,
       icon: <Package className='w-6 h-6' />,
       gradient: 'from-orange-500 to-red-500',
-      change: `${stats?.packages.today || 0} received today`,
+      change: `${stats?.packages?.today || 0} received today`,
     },
     {
       title: 'Active Shipments',

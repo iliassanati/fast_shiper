@@ -1,4 +1,4 @@
-// server/src/routes/admin/adminShipmentRoutes.ts
+// server/src/routes/admin/adminShipmentRoutes.ts - WITH DHL ROUTES
 import { Router } from 'express';
 import * as adminShipmentController from '../../controllers/admin/adminShipmentController.js';
 import { authenticateAdmin } from '../../middleware/adminAuth.js';
@@ -21,6 +21,13 @@ router.get('/', adminShipmentController.getAllShipments);
  * @access  Private (Admin)
  */
 router.get('/statistics', adminShipmentController.getShipmentStatistics);
+
+/**
+ * @route   POST /api/admin/shipments/get-rates
+ * @desc    Get DHL shipping rates (NEW)
+ * @access  Private (Admin)
+ */
+router.post('/get-rates', adminShipmentController.getDHLRates);
 
 /**
  * @route   POST /api/admin/shipments/bulk-update
@@ -56,5 +63,12 @@ router.put('/:id/status', adminShipmentController.updateShipmentStatusById);
  * @access  Private (Admin)
  */
 router.post('/:id/tracking', adminShipmentController.addTrackingEvent);
+
+/**
+ * @route   POST /api/admin/shipments/:id/create-label
+ * @desc    Create DHL shipping label (NEW)
+ * @access  Private (Admin)
+ */
+router.post('/:id/create-label', adminShipmentController.createDHLLabel);
 
 export default router;

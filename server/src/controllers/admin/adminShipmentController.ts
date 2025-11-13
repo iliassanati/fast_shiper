@@ -1,4 +1,4 @@
-// server/src/controllers/admin/adminShipmentController.ts
+// server/src/controllers/admin/adminShipmentController.ts - WITH DHL INTEGRATION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../../models/Shipment.js';
 import { Package } from '../../models/Package.js';
 import { createNotification } from '../../models/Notification.js';
+import { dhlService } from '../../services/dhlService.js';
 import {
   sendSuccess,
   sendError,
@@ -99,6 +100,150 @@ export const getShipmentDetails = async (
     sendSuccess(res, { shipment });
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Create DHL shipping label - NEW
+ * POST /api/admin/shipments/:id/create-label
+ */
+export const createDHLLabel = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.isAdmin) {
+      sendForbidden(res);
+      return;
+    }
+
+    const { id } = req.params;
+    const shipment = await findShipmentById(id);
+
+    if (!shipment) {
+      sendNotFound(res, 'Shipment not found');
+      return;
+    }
+
+    // Check if DHL is configured
+    if (!dhlService.isConfigured()) {
+      sendError(
+        res,
+        'DHL service is not configured. Please add DHL credentials to environment variables.',
+        500
+      );
+      return;
+    }
+
+    // Check if label already exists
+    if (shipment.status !== 'pending' && shipment.status !== 'processing') {
+      sendError(
+        res,
+        'Can only create labels for pending or processing shipments',
+        400
+      );
+      return;
+    }
+
+    console.log('📦 Creating DHL label for shipment:', shipment._id);
+
+    // Create DHL shipment
+    const dhlResponse = await dhlService.createShipment({
+      shipment: shipment as any,
+      includeLabel: true,
+    });
+
+    console.log('✅ DHL shipment created:', dhlResponse.shipmentTrackingNumber);
+
+    // Update shipment with DHL tracking number
+    shipment.trackingNumber = dhlResponse.shipmentTrackingNumber;
+    shipment.status = 'processing';
+
+    // Add tracking event
+    shipment.trackingEvents.push({
+      status: 'label_created',
+      location: 'Warehouse - USA',
+      description: 'DHL shipping label created',
+      timestamp: new Date(),
+    });
+
+    // Store label URL in notes (or create a new field for this)
+    if (dhlResponse.labelUrl) {
+      shipment.notes = `${shipment.notes}\n\nDHL Label: ${dhlResponse.labelUrl}`;
+    }
+
+    await shipment.save();
+
+    // Notify user
+    await createNotification({
+      userId: shipment.userId,
+      type: 'shipment_update',
+      title: 'Shipping Label Created',
+      message: `Your shipment has been processed and a DHL shipping label has been created. Tracking: ${dhlResponse.shipmentTrackingNumber}`,
+      relatedId: shipment._id,
+      relatedModel: 'Shipment',
+      priority: 'normal',
+      actionUrl: `/shipments/${shipment._id}`,
+    });
+
+    sendSuccess(
+      res,
+      {
+        shipment,
+        dhl: {
+          trackingNumber: dhlResponse.shipmentTrackingNumber,
+          trackingUrl: dhlResponse.trackingUrl,
+          labelUrl: dhlResponse.labelUrl,
+        },
+      },
+      'DHL shipping label created successfully'
+    );
+  } catch (error: any) {
+    console.error('DHL Label Creation Error:', error);
+    sendError(res, error.message || 'Failed to create DHL label', 500);
+  }
+};
+
+/**
+ * Get DHL shipping rates - NEW
+ * POST /api/admin/shipments/get-rates
+ */
+export const getDHLRates = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.isAdmin) {
+      sendForbidden(res);
+      return;
+    }
+
+    const { weight, dimensions } = req.body;
+
+    if (!weight || !dimensions) {
+      sendError(res, 'Weight and dimensions are required', 400);
+      return;
+    }
+
+    // Check if DHL is configured
+    if (!dhlService.isConfigured()) {
+      sendError(res, 'DHL service is not configured', 500);
+      return;
+    }
+
+    const rates = await dhlService.getRates({
+      weight,
+      dimensions,
+      originCountryCode: 'US',
+      destinationCountryCode: 'MA',
+    });
+
+    sendSuccess(res, { rates });
+  } catch (error: any) {
+    console.error('DHL Rates Error:', error);
+    sendError(res, error.message || 'Failed to get DHL rates', 500);
   }
 };
 
