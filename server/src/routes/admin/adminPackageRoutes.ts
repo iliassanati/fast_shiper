@@ -50,4 +50,11 @@ router.put('/:id', adminPackageController.updatePackageDetails);
  */
 router.post('/:id/photos', adminPackageController.uploadPackagePhotos);
 
+/**
+ * @route   GET /api/admin/packages/:id
+ * @desc    Get single package details
+ * @access  Private (Admin)
+ */
+router.get('/:id', adminPackageController.getPackageDetails);
+
 export default router;

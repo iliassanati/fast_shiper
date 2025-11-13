@@ -375,3 +375,32 @@ export const bulkUpdatePackages = async (
     next(error);
   }
 };
+
+/**
+ * Get single package details
+ * GET /api/admin/packages/:id
+ */
+export const getPackageDetails = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.isAdmin) {
+      sendForbidden(res);
+      return;
+    }
+
+    const { id } = req.params;
+    const pkg = await findPackageById(id);
+
+    if (!pkg) {
+      sendNotFound(res, 'Package not found');
+      return;
+    }
+
+    sendSuccess(res, { package: pkg });
+  } catch (error) {
+    next(error);
+  }
+};
