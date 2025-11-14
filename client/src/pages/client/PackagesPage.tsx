@@ -1,3 +1,4 @@
+// client/src/pages/client/PackagesPage.tsx - FIXED VERSION
 import PackageCard from '@/components/dashboard/PackageCard';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useNotificationStore, usePackageStore } from '@/stores';
@@ -14,7 +15,7 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function PackagesPage() {
@@ -24,8 +25,10 @@ export default function PackagesPage() {
     selectedPackageIds,
     togglePackageSelection,
     clearSelection,
+    fetchPackages, // ADD THIS
+    loading, // ADD THIS
   } = usePackageStore();
-  console.log('🚀 ~ PackagesPage ~ packages:', packages);
+
   const { addNotification } = useNotificationStore();
 
   // Local state
@@ -35,6 +38,22 @@ export default function PackagesPage() {
   );
   const [sortBy, setSortBy] = useState<'date' | 'weight' | 'storage'>('date');
   const [showFilters, setShowFilters] = useState(false);
+
+  // 🔥 CRITICAL FIX: Fetch packages on mount
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        console.log('📦 Loading packages...');
+        await fetchPackages({ limit: 100 });
+        console.log('✅ Packages loaded:', packages.length);
+      } catch (error) {
+        console.error('❌ Error loading packages:', error);
+        addNotification('Failed to load packages', 'error');
+      }
+    };
+
+    loadPackages();
+  }, [fetchPackages, addNotification]);
 
   // Filter options
   const statusOptions: Array<{
@@ -140,6 +159,20 @@ export default function PackagesPage() {
     }
     navigate('/request-info');
   };
+
+  // Show loading state
+  if (loading && packages.length === 0) {
+    return (
+      <DashboardLayout activeSection='packages'>
+        <div className='flex items-center justify-center min-h-[400px]'>
+          <div className='text-center'>
+            <div className='w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4' />
+            <p className='text-slate-600'>Loading packages...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout activeSection='packages'>

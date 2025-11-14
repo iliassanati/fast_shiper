@@ -1,4 +1,4 @@
-// client/src/stores/usePackageStore.ts
+// client/src/stores/usePackageStore.ts - FIXED VERSION
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { Package, PackageStatus } from '@/types/client.types';
@@ -101,67 +101,117 @@ export const usePackageStore = create<PackageState>()(
 
     fetchPackages: async (filters) => {
       set({ loading: true, error: null });
+
       try {
+        console.log('🔍 Fetching packages with filters:', filters);
+
         const response = await apiHelpers.get<{
-          packages: Package[];
+          packages: any[];
           pagination: any;
         }>('/packages', filters);
 
-        // Transform backend data to frontend format
-        const packages = response.packages.map((pkg: any) => ({
-          id: pkg._id || pkg.id,
-          description: pkg.description,
-          retailer: pkg.retailer,
-          trackingNumber: pkg.trackingNumber,
-          weight: `${pkg.weight.value}`,
-          dimensions: `${pkg.dimensions.length}x${pkg.dimensions.width}x${pkg.dimensions.height}`,
-          photo: getEmojiForRetailer(pkg.retailer),
-          receivedDate: new Date(pkg.receivedDate).toISOString().split('T')[0],
-          storageDay: pkg.storageDay,
-          status: pkg.status,
-          estimatedValue: `$${pkg.estimatedValue.amount}`,
-        }));
+        console.log('📦 API Response:', response);
+        console.log('📦 Packages count:', response.packages?.length || 0);
 
-        set({ packages, loading: false, initialized: true });
+        if (!response.packages) {
+          console.warn('⚠️ No packages array in response');
+          set({ packages: [], loading: false, initialized: true });
+          return;
+        }
+
+        // Transform backend data to frontend format
+        const packages = response.packages.map((pkg: any) => {
+          console.log('🔄 Transforming package:', pkg._id || pkg.id);
+
+          return {
+            id: pkg._id || pkg.id,
+            description: pkg.description || 'No description',
+            retailer: pkg.retailer || 'Unknown',
+            trackingNumber: pkg.trackingNumber || 'N/A',
+            weight: `${pkg.weight?.value || 0}`,
+            dimensions: `${pkg.dimensions?.length || 0}x${
+              pkg.dimensions?.width || 0
+            }x${pkg.dimensions?.height || 0}`,
+            photo: getEmojiForRetailer(pkg.retailer || 'Unknown'),
+            receivedDate: pkg.receivedDate
+              ? new Date(pkg.receivedDate).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            storageDay: pkg.storageDay || 0,
+            status: pkg.status || 'received',
+            estimatedValue: `$${pkg.estimatedValue?.amount || 0}`,
+          };
+        });
+
+        console.log('✅ Transformed packages:', packages.length);
+        console.log('📊 First package:', packages[0]);
+
+        set({ packages, loading: false, initialized: true, error: null });
       } catch (error: any) {
-        console.error('Error fetching packages:', error);
+        console.error('❌ Error fetching packages:', error);
+        console.error('❌ Error details:', error.response?.data);
+
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to fetch packages';
+
         set({
-          error: error.response?.data?.error || 'Failed to fetch packages',
+          error: errorMessage,
           loading: false,
           initialized: true,
+          packages: [], // Set empty array on error
         });
+
+        throw error;
       }
     },
 
     fetchPackageById: async (id: string) => {
       set({ loading: true, error: null });
       try {
+        console.log('🔍 Fetching package by ID:', id);
+
         const response = await apiHelpers.get<{ package: any }>(
           `/packages/${id}`
         );
 
+        console.log('📦 Package response:', response.package);
+
         const pkg = response.package;
         const transformedPkg: Package = {
           id: pkg._id || pkg.id,
-          description: pkg.description,
-          retailer: pkg.retailer,
-          trackingNumber: pkg.trackingNumber,
-          weight: `${pkg.weight.value}`,
-          dimensions: `${pkg.dimensions.length}x${pkg.dimensions.width}x${pkg.dimensions.height}`,
-          photo: getEmojiForRetailer(pkg.retailer),
-          receivedDate: new Date(pkg.receivedDate).toISOString().split('T')[0],
-          storageDay: pkg.storageDay,
-          status: pkg.status,
-          estimatedValue: `$${pkg.estimatedValue.amount}`,
+          description: pkg.description || 'No description',
+          retailer: pkg.retailer || 'Unknown',
+          trackingNumber: pkg.trackingNumber || 'N/A',
+          weight: `${pkg.weight?.value || 0}`,
+          dimensions: `${pkg.dimensions?.length || 0}x${
+            pkg.dimensions?.width || 0
+          }x${pkg.dimensions?.height || 0}`,
+          photo: getEmojiForRetailer(pkg.retailer || 'Unknown'),
+          receivedDate: pkg.receivedDate
+            ? new Date(pkg.receivedDate).toISOString().split('T')[0]
+            : new Date().toISOString().split('T')[0],
+          storageDay: pkg.storageDay || 0,
+          status: pkg.status || 'received',
+          estimatedValue: `$${pkg.estimatedValue?.amount || 0}`,
         };
 
         // Update the package in the store
         get().updatePackage(id, transformedPkg);
         set({ loading: false });
+
+        console.log('✅ Package fetched successfully');
         return transformedPkg;
       } catch (error: any) {
+        console.error('❌ Error fetching package:', error);
+
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to fetch package';
+
         set({
-          error: error.response?.data?.error || 'Failed to fetch package',
+          error: errorMessage,
           loading: false,
         });
         throw error;
@@ -171,12 +221,23 @@ export const usePackageStore = create<PackageState>()(
     deletePackage: async (id: string) => {
       set({ loading: true, error: null });
       try {
+        console.log('🗑️ Deleting package:', id);
+
         await apiHelpers.delete(`/packages/${id}`);
         get().removePackage(id);
         set({ loading: false });
+
+        console.log('✅ Package deleted successfully');
       } catch (error: any) {
+        console.error('❌ Error deleting package:', error);
+
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to delete package';
+
         set({
-          error: error.response?.data?.error || 'Failed to delete package',
+          error: errorMessage,
           loading: false,
         });
         throw error;
