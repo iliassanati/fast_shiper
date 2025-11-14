@@ -1,3 +1,4 @@
+// client/src/layouts/DashboardLayout.tsx - FIXED VERSION
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Bell,
@@ -11,9 +12,15 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, useEffect } from 'react';
 import Logo from '../components/common/Logo';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  useAuthStore,
+  usePackageStore,
+  useShipmentStore,
+  useNotificationStore,
+} from '@/stores';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -36,9 +43,31 @@ export default function DashboardLayout({
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  // Inside component:
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Get real data from stores
+  const { user, logout } = useAuthStore();
+  const { packages } = usePackageStore();
+  const { shipments } = useShipmentStore();
+  const { notifications } = useNotificationStore();
+
+  // Real user info from auth store
+  const userInfo = {
+    name: user?.name || 'User',
+    email: user?.email || '',
+    suiteNumber: user?.suiteNumber || 'N/A',
+    avatar: '👨',
+  };
+
+  // Calculate real badge counts
+  const unreadNotifications = notifications.filter((n) => !n.read).length;
+  const packagesInStorage = packages.filter(
+    (p) => p.status === 'received'
+  ).length;
+  const activeShipments = shipments.filter(
+    (s) => s.status === 'in_transit' || s.status === 'pending'
+  ).length;
 
   // Determine active section from location
   const getActiveSection = () => {
@@ -49,13 +78,6 @@ export default function DashboardLayout({
     if (path.startsWith('/profile')) return 'profile';
     if (path.startsWith('/settings')) return 'settings';
     return 'overview';
-  };
-
-  const userInfo = {
-    name: 'Youssef El Amrani',
-    email: 'youssef@example.com',
-    suiteNumber: 'MA-1234',
-    avatar: '👨',
   };
 
   const menuItems: MenuItem[] = [
@@ -70,14 +92,14 @@ export default function DashboardLayout({
       id: 'packages',
       icon: <Package className='w-5 h-5' />,
       label: 'Packages',
-      badge: 3,
+      badge: packagesInStorage, // Real count
       href: '/packages',
     },
     {
       id: 'shipments',
       icon: <Truck className='w-5 h-5' />,
       label: 'Shipments',
-      badge: 1,
+      badge: activeShipments, // Real count
       href: '/shipments',
     },
     {
@@ -96,26 +118,14 @@ export default function DashboardLayout({
     },
   ];
 
-  const notifications = [
-    {
-      id: 1,
-      message: 'New package received from Amazon',
-      time: '2 hours ago',
-      unread: true,
-    },
-    {
-      id: 2,
-      message: 'Shipment DHL123456789MA is in transit',
-      time: '1 day ago',
-      unread: true,
-    },
-    {
-      id: 3,
-      message: 'Package PKG001 has been in storage for 40 days',
-      time: '2 days ago',
-      unread: false,
-    },
-  ];
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/auth/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex'>
@@ -186,7 +196,7 @@ export default function DashboardLayout({
                   {item.badge !== null && item.badge > 0 && (
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        activeSection === item.id
+                        getActiveSection() === item.id
                           ? 'bg-white text-blue-600'
                           : 'bg-blue-100 text-blue-600'
                       }`}
@@ -203,7 +213,10 @@ export default function DashboardLayout({
         {/* Logout */}
         {sidebarOpen && (
           <div className='absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200'>
-            <button className='w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors'>
+            <button
+              onClick={handleLogout}
+              className='w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors'
+            >
               <LogOut className='w-5 h-5' />
               <span className='font-semibold'>Logout</span>
             </button>
@@ -236,7 +249,9 @@ export default function DashboardLayout({
                   className='relative p-2 hover:bg-slate-100 rounded-lg transition-colors'
                 >
                   <Bell className='w-6 h-6 text-slate-700' />
-                  <span className='absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full'></span>
+                  {unreadNotifications > 0 && (
+                    <span className='absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full'></span>
+                  )}
                 </button>
 
                 <AnimatePresence>
@@ -251,21 +266,26 @@ export default function DashboardLayout({
                         Notifications
                       </h3>
                       <div className='space-y-2'>
-                        {notifications.map((notif) => (
+                        {notifications.slice(0, 5).map((notif) => (
                           <div
                             key={notif.id}
                             className={`p-3 rounded-lg ${
-                              notif.unread ? 'bg-blue-50' : 'bg-slate-50'
+                              notif.read ? 'bg-slate-50' : 'bg-blue-50'
                             }`}
                           >
                             <p className='text-sm font-semibold text-slate-900'>
-                              {notif.message}
+                              {notif.title}
                             </p>
-                            <p className='text-xs text-slate-500 mt-1'>
-                              {notif.time}
+                            <p className='text-xs text-slate-600 mt-1'>
+                              {notif.message}
                             </p>
                           </div>
                         ))}
+                        {notifications.length === 0 && (
+                          <p className='text-sm text-slate-500 text-center py-4'>
+                            No notifications
+                          </p>
+                        )}
                       </div>
                     </motion.div>
                   )}
