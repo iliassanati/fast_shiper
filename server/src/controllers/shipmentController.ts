@@ -1,4 +1,4 @@
-// server/src/controllers/shipmentController.ts
+// server/src/controllers/shipmentController.ts - UPDATED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest, CreateShipmentDTO } from '../types/index.js';
 import {
@@ -30,11 +30,13 @@ export const getShipments = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { status, page = 1, limit = 20 } = req.query;
+
+    console.log('🚚 Fetching shipments for user:', req.user.userId);
 
     const filters = {
       status: status as string | undefined,
@@ -42,11 +44,19 @@ export const getShipments = async (
       limit: Number(limit),
     };
 
+    // CRITICAL: This ensures we only get shipments for THIS user
     const shipments = await findShipmentsByUser(req.user.userId, filters);
-    const total = await Shipment.countDocuments({
-      userId: req.user.userId,
-      ...(status && { status }),
-    });
+
+    // Count total shipments for this user
+    const countQuery: any = { userId: req.user.userId };
+    if (status) {
+      countQuery.status = status;
+    }
+    const total = await Shipment.countDocuments(countQuery);
+
+    console.log(
+      `✅ Found ${shipments.length} shipments for user ${req.user.userId}`
+    );
 
     sendSuccess(res, {
       shipments,
@@ -58,6 +68,7 @@ export const getShipments = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching shipments:', error);
     next(error);
   }
 };
@@ -73,7 +84,7 @@ export const getShipmentById = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -85,14 +96,15 @@ export const getShipmentById = async (
       return;
     }
 
-    // Check ownership
+    // CRITICAL: Check ownership - user can only see their own shipments
     if (shipment.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      sendForbidden(res, 'Access denied to this shipment');
       return;
     }
 
     sendSuccess(res, { shipment });
   } catch (error) {
+    console.error('❌ Error fetching shipment:', error);
     next(error);
   }
 };
@@ -108,11 +120,13 @@ export const createNewShipment = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const shipmentData: CreateShipmentDTO = req.body;
+
+    console.log('🚚 Creating shipment for user:', req.user.userId);
 
     // Validate packages exist and belong to user
     const packages = await Promise.all(
@@ -124,7 +138,12 @@ export const createNewShipment = async (
       return;
     }
 
-    if (packages.some((pkg) => pkg!.userId.toString() !== req.user!.userId)) {
+    // CRITICAL: Verify all packages belong to this user
+    const invalidPackages = packages.filter(
+      (pkg) => pkg!.userId.toString() !== req.user!.userId
+    );
+
+    if (invalidPackages.length > 0) {
       sendForbidden(res, 'Access denied to one or more packages');
       return;
     }
@@ -168,9 +187,9 @@ export const createNewShipment = async (
     const estimatedDelivery = new Date();
     estimatedDelivery.setDate(estimatedDelivery.getDate() + 5); // Default 5 days
 
-    // Create shipment
+    // Create shipment - ENSURE userId is set
     const shipment = await createShipment({
-      userId: req.user.userId,
+      userId: req.user.userId, // CRITICAL: Set the userId
       packageIds: shipmentData.packageIds,
       carrier: shipmentData.carrier as any,
       serviceLevel: shipmentData.serviceLevel,
@@ -220,7 +239,7 @@ export const createNewShipment = async (
         value: shipment.cost.total,
         currency: 'MAD',
       },
-      paymentMethod: 'card', // Default, should come from payment gateway
+      paymentMethod: 'card',
       description: `Shipping via ${shipment.carrier} - ${shipment.trackingNumber}`,
     });
 
@@ -236,8 +255,11 @@ export const createNewShipment = async (
       actionUrl: `/shipments/${shipment._id}`,
     });
 
+    console.log('✅ Shipment created successfully:', shipment._id);
+
     sendSuccess(res, { shipment }, 'Shipment created successfully', 201);
   } catch (error) {
+    console.error('❌ Error creating shipment:', error);
     next(error);
   }
 };
@@ -253,7 +275,7 @@ export const updateShipmentStatusById = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -267,9 +289,9 @@ export const updateShipmentStatusById = async (
       return;
     }
 
-    // Check ownership
+    // CRITICAL: Check ownership
     if (shipment.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      sendForbidden(res, 'Access denied to this shipment');
       return;
     }
 
@@ -311,18 +333,21 @@ export const updateShipmentStatusById = async (
       );
     }
 
+    console.log('✅ Shipment status updated:', id, status);
+
     sendSuccess(
       res,
       { shipment: updatedShipment },
       'Shipment status updated successfully'
     );
   } catch (error) {
+    console.error('❌ Error updating shipment:', error);
     next(error);
   }
 };
 
 /**
- * Get shipment statistics
+ * Get shipment statistics for current user
  * GET /api/shipments/stats
  */
 export const getShipmentStats = async (
@@ -332,12 +357,15 @@ export const getShipmentStats = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const userId = req.user.userId;
 
+    console.log('📊 Fetching shipment stats for user:', userId);
+
+    // CRITICAL: Filter by userId for all stats
     const [total, inTransit, delivered, totalCost] = await Promise.all([
       Shipment.countDocuments({ userId }),
       Shipment.countDocuments({ userId, status: 'in_transit' }),
@@ -348,6 +376,12 @@ export const getShipmentStats = async (
       ]),
     ]);
 
+    console.log('✅ Shipment stats calculated:', {
+      total,
+      inTransit,
+      delivered,
+    });
+
     sendSuccess(res, {
       stats: {
         total,
@@ -357,6 +391,7 @@ export const getShipmentStats = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching shipment stats:', error);
     next(error);
   }
 };

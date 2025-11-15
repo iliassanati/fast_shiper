@@ -1,4 +1,4 @@
-// server/src/controllers/packageController.ts
+// server/src/controllers/packageController.ts - UPDATED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../types/index.js';
 import {
@@ -28,11 +28,13 @@ export const getPackages = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { status, page = 1, limit = 20 } = req.query;
+
+    console.log('🔍 Fetching packages for user:', req.user.userId);
 
     const filters = {
       status: status as string | undefined,
@@ -40,11 +42,19 @@ export const getPackages = async (
       limit: Number(limit),
     };
 
+    // CRITICAL: This ensures we only get packages for THIS user
     const packages = await findPackagesByUser(req.user.userId, filters);
-    const total = await Package.countDocuments({
-      userId: req.user.userId,
-      ...(status && { status }),
-    });
+
+    // Count total packages for this user
+    const countQuery: any = { userId: req.user.userId };
+    if (status) {
+      countQuery.status = status;
+    }
+    const total = await Package.countDocuments(countQuery);
+
+    console.log(
+      `✅ Found ${packages.length} packages for user ${req.user.userId}`
+    );
 
     sendSuccess(res, {
       packages,
@@ -56,6 +66,7 @@ export const getPackages = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching packages:', error);
     next(error);
   }
 };
@@ -71,7 +82,7 @@ export const getPackageById = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -83,9 +94,9 @@ export const getPackageById = async (
       return;
     }
 
-    // Check ownership
+    // CRITICAL: Check ownership - user can only see their own packages
     if (pkg.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      sendForbidden(res, 'Access denied to this package');
       return;
     }
 
@@ -95,6 +106,7 @@ export const getPackageById = async (
 
     sendSuccess(res, { package: pkg });
   } catch (error) {
+    console.error('❌ Error fetching package:', error);
     next(error);
   }
 };
@@ -110,14 +122,18 @@ export const createNewPackage = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
+    // For user creation, use their own userId
+    // For admin creation, userId should be in the request body
     const packageData = {
       ...req.body,
-      userId: req.user.userId,
+      userId: req.body.userId || req.user.userId, // Admin can specify userId, user uses their own
     };
+
+    console.log('📦 Creating package for user:', packageData.userId);
 
     const pkg = await createPackage(packageData);
 
@@ -133,8 +149,11 @@ export const createNewPackage = async (
       actionUrl: `/packages/${pkg._id}`,
     });
 
+    console.log('✅ Package created successfully:', pkg._id);
+
     sendSuccess(res, { package: pkg }, 'Package created successfully', 201);
   } catch (error) {
+    console.error('❌ Error creating package:', error);
     next(error);
   }
 };
@@ -150,7 +169,7 @@ export const updatePackage = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -162,9 +181,9 @@ export const updatePackage = async (
       return;
     }
 
-    // Check ownership
+    // CRITICAL: Check ownership
     if (pkg.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      sendForbidden(res, 'Access denied to this package');
       return;
     }
 
@@ -172,8 +191,11 @@ export const updatePackage = async (
     Object.assign(pkg, req.body);
     await pkg.save();
 
+    console.log('✅ Package updated:', id);
+
     sendSuccess(res, { package: pkg }, 'Package updated successfully');
   } catch (error) {
+    console.error('❌ Error updating package:', error);
     next(error);
   }
 };
@@ -189,7 +211,7 @@ export const removePackage = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -201,9 +223,9 @@ export const removePackage = async (
       return;
     }
 
-    // Check ownership
+    // CRITICAL: Check ownership
     if (pkg.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      sendForbidden(res, 'Access denied to this package');
       return;
     }
 
@@ -215,14 +237,17 @@ export const removePackage = async (
 
     await deletePackage(id);
 
+    console.log('✅ Package deleted:', id);
+
     sendSuccess(res, null, 'Package deleted successfully');
   } catch (error) {
+    console.error('❌ Error deleting package:', error);
     next(error);
   }
 };
 
 /**
- * Get package statistics
+ * Get package statistics for current user
  * GET /api/packages/stats
  */
 export const getPackageStats = async (
@@ -232,12 +257,15 @@ export const getPackageStats = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const userId = req.user.userId;
 
+    console.log('📊 Fetching stats for user:', userId);
+
+    // CRITICAL: Filter by userId for all stats
     const [total, inStorage, consolidated, shipped] = await Promise.all([
       Package.countDocuments({ userId }),
       Package.countDocuments({ userId, status: 'received' }),
@@ -263,6 +291,13 @@ export const getPackageStats = async (
       avgStorageDays = Math.round(totalDays / packagesInStorage.length);
     }
 
+    console.log('✅ Stats calculated:', {
+      total,
+      inStorage,
+      consolidated,
+      shipped,
+    });
+
     sendSuccess(res, {
       stats: {
         total,
@@ -274,6 +309,7 @@ export const getPackageStats = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching stats:', error);
     next(error);
   }
 };

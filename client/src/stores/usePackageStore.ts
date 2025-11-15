@@ -104,24 +104,48 @@ export const usePackageStore = create<PackageState>()(
 
       try {
         console.log('🔍 Fetching packages with filters:', filters);
+        console.log(
+          '🔑 Token in localStorage:',
+          !!localStorage.getItem('auth-token')
+        );
 
         const response = await apiHelpers.get<{
           packages: any[];
           pagination: any;
         }>('/packages', filters);
 
-        console.log('📦 API Response:', response);
-        console.log('📦 Packages count:', response.packages?.length || 0);
+        console.log('📦 API Response received');
+        console.log('📦 Response structure:', {
+          hasPackages: !!response.packages,
+          packagesCount: response.packages?.length || 0,
+          hasPagination: !!response.pagination,
+        });
 
+        // Handle empty response
         if (!response.packages) {
           console.warn('⚠️ No packages array in response');
           set({ packages: [], loading: false, initialized: true });
           return;
         }
 
+        // Handle empty packages array (valid response, just no packages yet)
+        if (response.packages.length === 0) {
+          console.log('ℹ️ User has no packages yet');
+          set({ packages: [], loading: false, initialized: true, error: null });
+          return;
+        }
+
         // Transform backend data to frontend format
-        const packages = response.packages.map((pkg: any) => {
-          console.log('🔄 Transforming package:', pkg._id || pkg.id);
+        const packages = response.packages.map((pkg: any, index: number) => {
+          console.log(
+            `🔄 Transforming package ${index + 1}/${response.packages.length}:`,
+            {
+              id: pkg._id || pkg.id,
+              description: pkg.description,
+              retailer: pkg.retailer,
+              status: pkg.status,
+            }
+          );
 
           return {
             id: pkg._id || pkg.id,
@@ -142,13 +166,16 @@ export const usePackageStore = create<PackageState>()(
           };
         });
 
-        console.log('✅ Transformed packages:', packages.length);
-        console.log('📊 First package:', packages[0]);
+        console.log('✅ Successfully transformed packages:', packages.length);
+        if (packages.length > 0) {
+          console.log('📊 Sample package:', packages[0]);
+        }
 
         set({ packages, loading: false, initialized: true, error: null });
       } catch (error: any) {
         console.error('❌ Error fetching packages:', error);
-        console.error('❌ Error details:', error.response?.data);
+        console.error('❌ Error response:', error.response?.data);
+        console.error('❌ Error status:', error.response?.status);
 
         const errorMessage =
           error.response?.data?.error ||
@@ -159,10 +186,11 @@ export const usePackageStore = create<PackageState>()(
           error: errorMessage,
           loading: false,
           initialized: true,
-          packages: [], // Set empty array on error
+          packages: [],
         });
 
-        throw error;
+        // Don't throw error, just log it
+        console.error('❌ Package fetch failed with message:', errorMessage);
       }
     },
 

@@ -17,6 +17,9 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    console.log('🔑 Token attached to request');
+  } else {
+    console.warn('⚠️ No token found in localStorage');
   }
   return config;
 });
@@ -28,7 +31,7 @@ interface AuthState {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  initialized: boolean; // NEW: track if auth has been initialized
+  initialized: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   register: (data: {
@@ -54,19 +57,23 @@ export const useAuthStore = create<AuthState>()(
         usAddress: null,
         token: null,
         isAuthenticated: false,
-        loading: true, // FIX: Start with loading true
+        loading: true,
         error: null,
-        initialized: false, // FIX: Track initialization
+        initialized: false,
 
         clearError: () => set({ error: null }),
 
         login: async (email: string, password: string) => {
           set({ loading: true, error: null });
           try {
+            console.log('🔐 Attempting login for:', email);
+
             const response = await api.post('/auth/login', {
               email,
               password,
             });
+
+            console.log('✅ Login successful:', response.data);
 
             const { user, usAddress, token } = response.data.data;
 
@@ -79,14 +86,17 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               loading: false,
               error: null,
+              initialized: true,
             });
           } catch (error: any) {
+            console.error('❌ Login failed:', error);
             const errorMessage =
               error.response?.data?.error || 'Login failed. Please try again.';
             set({
               error: errorMessage,
               loading: false,
               isAuthenticated: false,
+              initialized: true,
             });
             throw new Error(errorMessage);
           }
@@ -95,7 +105,11 @@ export const useAuthStore = create<AuthState>()(
         register: async (data) => {
           set({ loading: true, error: null });
           try {
+            console.log('📝 Attempting registration for:', data.email);
+
             const response = await api.post('/auth/register', data);
+
+            console.log('✅ Registration successful:', response.data);
 
             const { user, usAddress, token } = response.data.data;
 
@@ -108,8 +122,10 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               loading: false,
               error: null,
+              initialized: true,
             });
           } catch (error: any) {
+            console.error('❌ Registration failed:', error);
             const errorMessage =
               error.response?.data?.error ||
               error.response?.data?.errors ||
@@ -120,6 +136,7 @@ export const useAuthStore = create<AuthState>()(
                   ? Object.values(errorMessage).join(', ')
                   : errorMessage,
               loading: false,
+              initialized: true,
             });
             throw new Error(errorMessage);
           }
@@ -127,6 +144,7 @@ export const useAuthStore = create<AuthState>()(
 
         logout: async () => {
           try {
+            console.log('👋 Logging out...');
             await api.post('/auth/logout');
           } catch (error) {
             console.error('Logout error:', error);
@@ -139,25 +157,36 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               error: null,
               loading: false,
+              initialized: true,
             });
+            console.log('✅ Logout complete');
           }
         },
 
         checkAuth: async () => {
           const token = localStorage.getItem('auth-token');
 
+          console.log('🔍 Checking authentication...');
+          console.log('Token exists:', !!token);
+
           if (!token) {
+            console.log('❌ No token found, user not authenticated');
             set({
               loading: false,
               isAuthenticated: false,
-              initialized: true, // FIX: Mark as initialized
+              initialized: true,
             });
             return;
           }
 
           set({ loading: true });
           try {
+            console.log('📡 Verifying token with server...');
+
             const response = await api.get('/auth/me');
+
+            console.log('✅ Auth check successful:', response.data);
+
             const { user, usAddress } = response.data.data;
 
             set({
@@ -167,10 +196,15 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               loading: false,
               error: null,
-              initialized: true, // FIX: Mark as initialized
+              initialized: true,
             });
-          } catch (error) {
-            console.error('Auth check failed:', error);
+
+            console.log('✅ User authenticated:', user.email);
+          } catch (error: any) {
+            console.error(
+              '❌ Auth check failed:',
+              error.response?.data || error.message
+            );
             localStorage.removeItem('auth-token');
             set({
               user: null,
@@ -178,7 +212,7 @@ export const useAuthStore = create<AuthState>()(
               token: null,
               isAuthenticated: false,
               loading: false,
-              initialized: true, // FIX: Mark as initialized
+              initialized: true,
             });
           }
         },
@@ -224,10 +258,13 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// FIX: Initialize auth properly
+// Initialize auth on app load
 if (typeof window !== 'undefined') {
-  // Call checkAuth after store is hydrated
+  console.log('🚀 Initializing auth store...');
+
+  // Wait for hydration, then check auth
   useAuthStore.persist.onFinishHydration(() => {
+    console.log('💧 Hydration complete, checking auth...');
     useAuthStore.getState().checkAuth();
   });
 }
