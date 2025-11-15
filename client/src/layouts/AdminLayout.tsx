@@ -1,4 +1,4 @@
-// client/src/layouts/AdminLayout.tsx
+// client/src/layouts/AdminLayout.tsx - FIXED WITH PHOTO REQUESTS
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,7 @@ import {
   Search,
   Shield,
   Box,
+  Camera,
 } from 'lucide-react';
 import { useAdminAuthStore } from '@/stores/useAdminAuthStore';
 
@@ -62,6 +63,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       label: 'Consolidations',
       icon: <Box className='w-5 h-5' />,
       href: '/admin/consolidations',
+    },
+    {
+      id: 'photo-requests',
+      label: 'Photo Requests',
+      icon: <Camera className='w-5 h-5' />,
+      href: '/admin/photo-requests',
     },
     {
       id: 'users',

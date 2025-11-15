@@ -1,4 +1,4 @@
-// client/src/pages/client/RequestInfoPage.tsx - COMPLETE WITH PAYMENT
+// client/src/pages/client/RequestInfoPage.tsx - COMPLETE WORKING VERSION
 import { apiHelpers } from '@/lib/api';
 import { useNotificationStore, usePackageStore } from '@/stores';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -50,13 +50,15 @@ export default function RequestInfoPage() {
   useEffect(() => {
     const loadPackages = async () => {
       try {
+        console.log('📦 Loading packages for photo request...');
         await fetchPackages({ limit: 100 });
       } catch (error) {
         console.error('Error loading packages:', error);
+        addNotification('Failed to load packages', 'error');
       }
     };
     loadPackages();
-  }, [fetchPackages]);
+  }, [fetchPackages, addNotification]);
 
   const availablePackages = packages.filter((pkg) => pkg.status === 'received');
 
@@ -184,11 +186,20 @@ export default function RequestInfoPage() {
         customInstructions,
       };
 
+      console.log('📤 Request data:', requestData);
+
       const response = await apiHelpers.post('/photo-requests', requestData);
 
       console.log('✅ Photo request created:', response);
 
-      setPhotoRequestId(response.photoRequest._id);
+      // Store the photo request ID
+      const requestId = response.photoRequest?._id || response.photoRequest?.id;
+
+      if (!requestId) {
+        throw new Error('No request ID returned from server');
+      }
+
+      setPhotoRequestId(requestId);
 
       addNotification(
         'Photo request created! Please confirm payment to proceed.',
@@ -199,7 +210,10 @@ export default function RequestInfoPage() {
     } catch (error: any) {
       console.error('❌ Error creating photo request:', error);
 
-      const errorMessage = error.message || 'Failed to submit photo request';
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to submit photo request';
 
       addNotification(errorMessage, 'error');
     } finally {
@@ -208,7 +222,7 @@ export default function RequestInfoPage() {
   };
 
   const handleConfirmPayment = async () => {
-    if (confirmingPayment) return;
+    if (confirmingPayment || !photoRequestId) return;
 
     setConfirmingPayment(true);
     try {
@@ -232,7 +246,8 @@ export default function RequestInfoPage() {
     } catch (error: any) {
       console.error('❌ Error confirming payment:', error);
 
-      const errorMessage = error.message || 'Payment failed';
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Payment failed';
 
       addNotification(errorMessage, 'error');
     } finally {
@@ -721,7 +736,7 @@ export default function RequestInfoPage() {
             <div className='flex justify-between'>
               <span className='text-slate-600'>Request ID:</span>
               <span className='font-mono font-bold text-blue-600'>
-                {requestId}
+                {requestId.slice(-8).toUpperCase()}
               </span>
             </div>
             <div className='flex justify-between'>
