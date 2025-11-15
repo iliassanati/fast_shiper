@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+// client/src/pages/client/RequestInfoPage.tsx - COMPLETE WORKING VERSION
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Camera,
@@ -9,92 +11,39 @@ import {
   AlertCircle,
   Info,
   FileText,
-  DollarSign,
-  Image,
-  Package,
-  Zap,
-  Search,
   Clock,
   ArrowRight,
   Plus,
   Minus,
   Eye,
+  Search,
+  Zap,
 } from 'lucide-react';
-
-interface PackageItem {
-  id: string;
-  description: string;
-  retailer: string;
-  weight: string;
-  dimensions: string;
-  photo: string;
-  trackingNumber: string;
-  receivedDate: string;
-  hasBasicPhoto: boolean;
-}
-
-const mockPackages: PackageItem[] = [
-  {
-    id: 'PKG001',
-    description: 'Wireless Headphones',
-    retailer: 'Amazon',
-    weight: '2.5 kg',
-    dimensions: '30x20x15 cm',
-    photo: '🎧',
-    trackingNumber: '1Z999AA10123456784',
-    receivedDate: '2025-10-08',
-    hasBasicPhoto: true,
-  },
-  {
-    id: 'PKG002',
-    description: 'Nike Shoes',
-    retailer: 'eBay',
-    weight: '1.2 kg',
-    dimensions: '25x15x10 cm',
-    photo: '👟',
-    trackingNumber: '1Z999AA10123456785',
-    receivedDate: '2025-10-09',
-    hasBasicPhoto: true,
-  },
-  {
-    id: 'PKG003',
-    description: 'Phone Case',
-    retailer: 'Best Buy',
-    weight: '0.8 kg',
-    dimensions: '20x15x5 cm',
-    photo: '📱',
-    trackingNumber: '1Z999AA10123456786',
-    receivedDate: '2025-10-10',
-    hasBasicPhoto: true,
-  },
-  {
-    id: 'PKG004',
-    description: 'USB Cable',
-    retailer: 'Amazon',
-    weight: '0.3 kg',
-    dimensions: '15x10x3 cm',
-    photo: '🔌',
-    trackingNumber: '1Z999AA10123456787',
-    receivedDate: '2025-10-10',
-    hasBasicPhoto: true,
-  },
-];
+import { usePackageStore, useNotificationStore } from '@/stores';
+import { apiHelpers } from '@/lib/api';
 
 type RequestType = 'photos' | 'information' | 'both';
 
-const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export default function RequestInfoPage() {
+  const navigate = useNavigate();
+  const { packages } = usePackageStore();
+  const { addNotification } = useNotificationStore();
+
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPackage, setSelectedPackage] = useState<string>('');
   const [requestType, setRequestType] = useState<RequestType>('photos');
   const [additionalPhotos, setAdditionalPhotos] = useState(1);
-  const [requestInformation, setRequestInformation] = useState(false);
   const [specificRequests, setSpecificRequests] = useState<string[]>([]);
   const [customInstructions, setCustomInstructions] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const totalSteps = 3;
-  const FIRST_PHOTO_COST = 40; // 40 MAD (~$4)
-  const ADDITIONAL_PHOTO_COST = 10; // 10 MAD per photo (~$1)
-  const INFORMATION_COST = 10; // 10 MAD (~$0.99)
+  const totalSteps = 4;
+  const FIRST_PHOTO_COST = 40;
+  const ADDITIONAL_PHOTO_COST = 10;
+  const INFORMATION_COST = 10;
+
+  // Get available packages (received status only)
+  const availablePackages = packages.filter((pkg) => pkg.status === 'received');
 
   const photoOptions = [
     {
@@ -166,18 +115,15 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const calculateCost = () => {
     let total = 0;
-
     if (requestType === 'photos' || requestType === 'both') {
       total += FIRST_PHOTO_COST;
       if (additionalPhotos > 1) {
         total += (additionalPhotos - 1) * ADDITIONAL_PHOTO_COST;
       }
     }
-
     if (requestType === 'information' || requestType === 'both') {
       total += INFORMATION_COST;
     }
-
     return total;
   };
 
@@ -187,6 +133,8 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return selectedPackage !== '';
       case 2:
         return specificRequests.length > 0 || customInstructions.trim() !== '';
+      case 3:
+        return true;
       default:
         return false;
     }
@@ -202,6 +150,49 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
+  };
+
+  const handleSubmit = async () => {
+    if (submitting) return;
+
+    setSubmitting(true);
+    try {
+      console.log('📸 Submitting photo request...');
+
+      const requestData = {
+        packageId: selectedPackage,
+        requestType,
+        additionalPhotos:
+          requestType === 'photos' || requestType === 'both'
+            ? additionalPhotos
+            : 0,
+        specificRequests,
+        customInstructions,
+      };
+
+      const response = await apiHelpers.post('/photo-requests', requestData);
+
+      console.log('✅ Photo request created:', response);
+
+      addNotification(
+        'Photo request submitted successfully! We will process it within 1 business day.',
+        'success'
+      );
+
+      setCurrentStep(4); // Move to confirmation step
+    } catch (error: any) {
+      console.error('❌ Error creating photo request:', error);
+      addNotification(
+        error.response?.data?.error || 'Failed to submit photo request',
+        'error'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    navigate('/packages');
   };
 
   // Step 1: Select Package & Request Type
@@ -280,7 +271,7 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </motion.div>
       </div>
 
-      {/* Photo Count Selection (if photos requested) */}
+      {/* Photo Count Selection */}
       {(requestType === 'photos' || requestType === 'both') && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -322,90 +313,72 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <Plus className='w-5 h-5 text-blue-600' />
             </motion.button>
           </div>
-          <div className='mt-4 p-3 bg-white rounded-lg'>
-            <div className='flex justify-between text-sm'>
-              <span className='text-slate-600'>First photo:</span>
-              <span className='font-bold text-slate-900'>40 MAD</span>
-            </div>
-            {additionalPhotos > 1 && (
-              <div className='flex justify-between text-sm mt-2'>
-                <span className='text-slate-600'>
-                  +{additionalPhotos - 1} additional:
-                </span>
-                <span className='font-bold text-slate-900'>
-                  {(additionalPhotos - 1) * ADDITIONAL_PHOTO_COST} MAD
-                </span>
-              </div>
-            )}
-          </div>
         </motion.div>
       )}
 
       {/* Package Selection */}
       <div>
         <h4 className='font-bold text-slate-900 mb-4'>Select Package</h4>
-        <div className='space-y-3'>
-          {mockPackages.map((pkg) => (
-            <motion.div
-              key={pkg.id}
-              whileHover={{ scale: 1.01 }}
-              onClick={() => setSelectedPackage(pkg.id)}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                selectedPackage === pkg.id
-                  ? 'border-blue-500 bg-blue-50 shadow-md'
-                  : 'border-slate-200 bg-white hover:border-blue-300'
-              }`}
-            >
-              <div className='flex items-center gap-4'>
-                <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    selectedPackage === pkg.id
-                      ? 'bg-blue-600 border-blue-600'
-                      : 'border-slate-300'
-                  }`}
-                >
-                  {selectedPackage === pkg.id && (
-                    <div className='w-2 h-2 bg-white rounded-full' />
-                  )}
-                </div>
-
-                <div className='text-4xl'>{pkg.photo}</div>
-
-                <div className='flex-1'>
-                  <p className='font-bold text-slate-900'>{pkg.description}</p>
-                  <div className='flex items-center gap-3 text-sm text-slate-600 mt-1'>
-                    <span>{pkg.retailer}</span>
-                    <span>•</span>
-                    <span>{pkg.weight}</span>
-                    <span>•</span>
-                    <span className='font-mono text-xs'>
-                      {pkg.trackingNumber.slice(-6)}
-                    </span>
+        {availablePackages.length === 0 ? (
+          <div className='bg-yellow-50 rounded-xl p-6 text-center'>
+            <AlertCircle className='w-12 h-12 text-yellow-600 mx-auto mb-3' />
+            <p className='text-yellow-900 font-semibold mb-2'>
+              No Packages Available
+            </p>
+            <p className='text-sm text-yellow-800'>
+              You need packages in storage to request photos or information.
+            </p>
+          </div>
+        ) : (
+          <div className='space-y-3'>
+            {availablePackages.map((pkg) => (
+              <motion.div
+                key={pkg.id}
+                whileHover={{ scale: 1.01 }}
+                onClick={() => setSelectedPackage(pkg.id)}
+                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  selectedPackage === pkg.id
+                    ? 'border-blue-500 bg-blue-50 shadow-md'
+                    : 'border-slate-200 bg-white hover:border-blue-300'
+                }`}
+              >
+                <div className='flex items-center gap-4'>
+                  <div
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                      selectedPackage === pkg.id
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'border-slate-300'
+                    }`}
+                  >
+                    {selectedPackage === pkg.id && (
+                      <div className='w-2 h-2 bg-white rounded-full' />
+                    )}
+                  </div>
+                  <div className='text-4xl'>{pkg.photo}</div>
+                  <div className='flex-1'>
+                    <p className='font-bold text-slate-900'>
+                      {pkg.description}
+                    </p>
+                    <div className='flex items-center gap-3 text-sm text-slate-600 mt-1'>
+                      <span>{pkg.retailer}</span>
+                      <span>•</span>
+                      <span>{pkg.weight} kg</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className='text-right'>
-                  {pkg.hasBasicPhoto && (
-                    <span className='px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold flex items-center gap-1'>
-                      <Image className='w-3 h-3' />
-                      Has Photo
-                    </span>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Info Box */}
       <div className='bg-slate-50 rounded-xl p-4 flex items-start gap-3'>
         <Info className='w-5 h-5 text-slate-600 flex-shrink-0 mt-0.5' />
         <div className='text-sm text-slate-700'>
           <p className='font-semibold mb-1'>What's Included</p>
           <p>
-            Each package comes with 1 FREE basic photo. You can request
-            additional photos or detailed inspection anytime.
+            Each package comes with 1 FREE basic photo. Request additional
+            photos anytime.
           </p>
         </div>
       </div>
@@ -414,7 +387,7 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   // Step 2: Specify Requirements
   const Step2SpecifyRequests = () => {
-    const selectedPkg = mockPackages.find((p) => p.id === selectedPackage);
+    const selectedPkg = availablePackages.find((p) => p.id === selectedPackage);
 
     return (
       <div className='space-y-6'>
@@ -427,7 +400,6 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </p>
         </div>
 
-        {/* Selected Package Info */}
         {selectedPkg && (
           <div className='bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200'>
             <div className='flex items-center gap-3'>
@@ -555,14 +527,13 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </p>
         </div>
 
-        {/* Processing Time */}
         <div className='bg-blue-50 rounded-xl p-4 flex items-start gap-3'>
           <Clock className='w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5' />
           <div className='text-sm text-blue-900'>
             <p className='font-semibold mb-1'>Processing Time</p>
             <p>
-              Requests are typically completed on the same or next business day
-              (Mon-Fri). We'll email you when ready.
+              Requests are typically completed same or next business day
+              (Mon-Fri).
             </p>
           </div>
         </div>
@@ -572,7 +543,7 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   // Step 3: Review & Confirm
   const Step3ReviewConfirm = () => {
-    const selectedPkg = mockPackages.find((p) => p.id === selectedPackage);
+    const selectedPkg = availablePackages.find((p) => p.id === selectedPackage);
     const totalCost = calculateCost();
 
     return (
@@ -597,11 +568,7 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className='flex items-center gap-3 text-sm text-slate-600 mt-1'>
                   <span>{selectedPkg.retailer}</span>
                   <span>•</span>
-                  <span>{selectedPkg.weight}</span>
-                  <span>•</span>
-                  <span className='font-mono text-xs'>
-                    {selectedPkg.trackingNumber}
-                  </span>
+                  <span>{selectedPkg.weight} kg</span>
                 </div>
               </div>
             </div>
@@ -750,23 +717,14 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </ul>
           </div>
         </div>
-
-        {/* Submit Notice */}
-        <div className='bg-green-50 rounded-xl p-4 flex items-center gap-3'>
-          <Eye className='w-5 h-5 text-green-600' />
-          <p className='text-sm text-green-900 font-semibold'>
-            Our team will carefully review and fulfill your request with
-            attention to detail
-          </p>
-        </div>
       </div>
     );
   };
 
-  // Step 4: Confirmation (after submission)
+  // Step 4: Confirmation
   const Step4Confirmation = () => {
     const requestId = `REQ-${Date.now().toString().slice(-6)}`;
-    const selectedPkg = mockPackages.find((p) => p.id === selectedPackage);
+    const selectedPkg = availablePackages.find((p) => p.id === selectedPackage);
 
     return (
       <div className='space-y-6 text-center py-8'>
@@ -876,24 +834,14 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </p>
         </div>
 
-        <div className='flex gap-3 justify-center'>
-          <motion.button
-            onClick={onClose}
-            className='px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full font-bold shadow-lg'
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Back to Dashboard
-          </motion.button>
-          <motion.button
-            className='px-8 py-3 bg-white border-2 border-blue-600 text-blue-600 rounded-full font-bold flex items-center gap-2'
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            View Status
-            <ArrowRight className='w-5 h-5' />
-          </motion.button>
-        </div>
+        <motion.button
+          onClick={handleClose}
+          className='px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full font-bold shadow-lg'
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          Back to Packages
+        </motion.button>
       </div>
     );
   };
@@ -919,12 +867,13 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 Request Photos & Information
               </h2>
               <p className='text-slate-600'>
-                Step {currentStep} of {totalSteps + 1}
+                Step {currentStep} of {totalSteps}
               </p>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className='p-2 hover:bg-slate-100 rounded-lg transition-colors'
+              disabled={submitting}
             >
               <X className='w-6 h-6' />
             </button>
@@ -936,9 +885,7 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <motion.div
                 className='h-full bg-gradient-to-r from-blue-600 to-purple-600'
                 initial={{ width: 0 }}
-                animate={{
-                  width: `${(currentStep / (totalSteps + 1)) * 100}%`,
-                }}
+                animate={{ width: `${(currentStep / totalSteps) * 100}%` }}
                 transition={{ duration: 0.3 }}
               />
             </div>
@@ -966,31 +913,36 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div className='bg-white border-t border-slate-200 p-6 rounded-b-3xl flex justify-between'>
             <motion.button
               onClick={prevStep}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || submitting}
               className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 ${
-                currentStep === 1
+                currentStep === 1 || submitting
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
               }`}
-              whileHover={currentStep > 1 ? { scale: 1.05 } : {}}
-              whileTap={currentStep > 1 ? { scale: 0.95 } : {}}
+              whileHover={currentStep > 1 && !submitting ? { scale: 1.05 } : {}}
+              whileTap={currentStep > 1 && !submitting ? { scale: 0.95 } : {}}
             >
               <ChevronLeft className='w-5 h-5' />
               Back
             </motion.button>
 
             <motion.button
-              onClick={currentStep === 3 ? () => setCurrentStep(4) : nextStep}
-              disabled={!canProceed()}
+              onClick={currentStep === 3 ? handleSubmit : nextStep}
+              disabled={!canProceed() || submitting}
               className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 ${
-                canProceed()
+                canProceed() && !submitting
                   ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
-              whileHover={canProceed() ? { scale: 1.05 } : {}}
-              whileTap={canProceed() ? { scale: 0.95 } : {}}
+              whileHover={canProceed() && !submitting ? { scale: 1.05 } : {}}
+              whileTap={canProceed() && !submitting ? { scale: 0.95 } : {}}
             >
-              {currentStep === 3 ? (
+              {submitting ? (
+                <>
+                  <div className='w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' />
+                  Processing...
+                </>
+              ) : currentStep === 3 ? (
                 <>
                   <Zap className='w-5 h-5' />
                   Submit Request
@@ -1007,31 +959,4 @@ const PhotoInfoRequest: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </motion.div>
     </motion.div>
   );
-};
-
-// Demo Component
-const RequestInfoPage: React.FC = () => {
-  const [showWorkflow, setShowWorkflow] = useState(true);
-
-  return (
-    <div className='min-h-screen bg-gradient-to-br from-slate-900 to-purple-900 flex items-center justify-center p-6'>
-      {!showWorkflow ? (
-        <motion.button
-          onClick={() => setShowWorkflow(true)}
-          className='px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-bold text-lg shadow-2xl flex items-center gap-2'
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <Camera className='w-6 h-6' />
-          Request Photos & Info
-        </motion.button>
-      ) : (
-        <AnimatePresence>
-          <PhotoInfoRequest onClose={() => setShowWorkflow(false)} />
-        </AnimatePresence>
-      )}
-    </div>
-  );
-};
-
-export default RequestInfoPage;
+}
