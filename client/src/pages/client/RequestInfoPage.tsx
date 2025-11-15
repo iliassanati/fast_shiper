@@ -14,19 +14,21 @@ import {
   FileText,
   Info,
   Minus,
+  Package,
   Plus,
   Search,
   X,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DashboardLayout from '@/layouts/DashboardLayout';
 
 type RequestType = 'photos' | 'information' | 'both';
 
 export default function RequestInfoPage() {
   const navigate = useNavigate();
-  const { packages } = usePackageStore();
+  const { packages, fetchPackages } = usePackageStore();
   const { addNotification } = useNotificationStore();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -42,7 +44,19 @@ export default function RequestInfoPage() {
   const PHOTO_REQUEST_COST = 20; // MAD per photo
   const INFORMATION_COST = 10; // MAD
 
-  const totalSteps = 5; // Added payment step
+  const totalSteps = 5;
+
+  // Fetch packages on mount
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        await fetchPackages({ limit: 100 });
+      } catch (error) {
+        console.error('Error loading packages:', error);
+      }
+    };
+    loadPackages();
+  }, [fetchPackages]);
 
   const availablePackages = packages.filter((pkg) => pkg.status === 'received');
 
@@ -134,7 +148,7 @@ export default function RequestInfoPage() {
       case 3:
         return true;
       case 4:
-        return true; // Payment step
+        return true;
       default:
         return false;
     }
@@ -148,7 +162,6 @@ export default function RequestInfoPage() {
 
   const prevStep = () => {
     if (currentStep > 1 && currentStep !== 4 && currentStep !== 5) {
-      // Can't go back from payment or confirmation
       setCurrentStep(currentStep - 1);
     }
   };
@@ -178,18 +191,15 @@ export default function RequestInfoPage() {
       setPhotoRequestId(response.photoRequest._id);
 
       addNotification(
-        `Photo request created! Please confirm payment to proceed.`,
+        'Photo request created! Please confirm payment to proceed.',
         'success'
       );
 
-      setCurrentStep(4); // Move to payment step
+      setCurrentStep(4);
     } catch (error: any) {
       console.error('❌ Error creating photo request:', error);
 
-      const errorMessage =
-        error.response?.data?.error ||
-        error.message ||
-        'Failed to submit photo request';
+      const errorMessage = error.message || 'Failed to submit photo request';
 
       addNotification(errorMessage, 'error');
     } finally {
@@ -218,12 +228,11 @@ export default function RequestInfoPage() {
         'success'
       );
 
-      setCurrentStep(5); // Move to final confirmation
+      setCurrentStep(5);
     } catch (error: any) {
       console.error('❌ Error confirming payment:', error);
 
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Payment failed';
+      const errorMessage = error.message || 'Payment failed';
 
       addNotification(errorMessage, 'error');
     } finally {
@@ -232,12 +241,253 @@ export default function RequestInfoPage() {
   };
 
   const handleClose = () => {
-    navigate('/packages');
+    navigate('/profile');
   };
 
-  // ... (Keep Step1SelectPackage and Step2SpecifyRequests the same as before - from document index 23)
+  // Step 1: Select Package
+  const Step1SelectPackage = () => (
+    <div className='space-y-6'>
+      <div>
+        <h3 className='text-2xl font-bold text-slate-900 mb-2'>
+          Select Package
+        </h3>
+        <p className='text-slate-600'>
+          Choose which package you'd like photos or information about
+        </p>
+      </div>
 
-  // Step 3: Review - Same as before
+      {availablePackages.length === 0 ? (
+        <div className='text-center py-12'>
+          <Package className='w-16 h-16 text-slate-300 mx-auto mb-4' />
+          <p className='text-slate-600 font-semibold mb-2'>
+            No packages in storage
+          </p>
+          <p className='text-sm text-slate-500'>
+            You need packages in storage to request photos
+          </p>
+        </div>
+      ) : (
+        <div className='grid gap-4'>
+          {availablePackages.map((pkg) => (
+            <motion.div
+              key={pkg.id}
+              onClick={() => setSelectedPackage(pkg.id)}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                selectedPackage === pkg.id
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-slate-200 hover:border-blue-300'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className='flex items-center gap-4'>
+                <div className='text-4xl'>{pkg.photo}</div>
+                <div className='flex-1'>
+                  <h4 className='font-bold text-slate-900'>
+                    {pkg.description}
+                  </h4>
+                  <div className='flex items-center gap-3 text-sm text-slate-600 mt-1'>
+                    <span>{pkg.retailer}</span>
+                    <span>•</span>
+                    <span>{pkg.weight} kg</span>
+                    <span>•</span>
+                    <span>Day {pkg.storageDay}</span>
+                  </div>
+                </div>
+                {selectedPackage === pkg.id && (
+                  <Check className='w-6 h-6 text-blue-600' />
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Step 2: Specify Requests
+  const Step2SpecifyRequests = () => (
+    <div className='space-y-6'>
+      <div>
+        <h3 className='text-2xl font-bold text-slate-900 mb-2'>
+          What do you need?
+        </h3>
+        <p className='text-slate-600'>
+          Specify your photo and information requests
+        </p>
+      </div>
+
+      {/* Request Type Selection */}
+      <div>
+        <label className='block text-sm font-semibold text-slate-700 mb-3'>
+          Request Type
+        </label>
+        <div className='grid grid-cols-3 gap-3'>
+          {[
+            { value: 'photos', label: 'Photos Only', icon: Camera },
+            { value: 'information', label: 'Info Only', icon: FileText },
+            { value: 'both', label: 'Both', icon: Zap },
+          ].map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setRequestType(option.value as RequestType)}
+              className={`p-4 rounded-xl border-2 transition-all ${
+                requestType === option.value
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-slate-200 hover:border-blue-300'
+              }`}
+            >
+              <option.icon
+                className={`w-6 h-6 mx-auto mb-2 ${
+                  requestType === option.value
+                    ? 'text-blue-600'
+                    : 'text-slate-400'
+                }`}
+              />
+              <p className='text-sm font-semibold text-slate-900'>
+                {option.label}
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Number of Additional Photos */}
+      {(requestType === 'photos' || requestType === 'both') && (
+        <div>
+          <label className='block text-sm font-semibold text-slate-700 mb-3'>
+            Additional Photos ({PHOTO_REQUEST_COST} MAD each)
+          </label>
+          <div className='flex items-center gap-4'>
+            <button
+              onClick={() =>
+                setAdditionalPhotos(Math.max(1, additionalPhotos - 1))
+              }
+              className='w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-300 transition-colors'
+            >
+              <Minus className='w-5 h-5' />
+            </button>
+            <div className='flex-1 text-center'>
+              <p className='text-3xl font-bold text-slate-900'>
+                {additionalPhotos}
+              </p>
+              <p className='text-sm text-slate-600'>
+                {additionalPhotos * PHOTO_REQUEST_COST} MAD
+              </p>
+            </div>
+            <button
+              onClick={() =>
+                setAdditionalPhotos(Math.min(10, additionalPhotos + 1))
+              }
+              className='w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors'
+            >
+              <Plus className='w-5 h-5' />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Specific Photo Requests */}
+      {(requestType === 'photos' || requestType === 'both') && (
+        <div>
+          <label className='block text-sm font-semibold text-slate-700 mb-3'>
+            Specific Photo Requests (Optional)
+          </label>
+          <div className='grid md:grid-cols-2 gap-3'>
+            {photoOptions.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => toggleSpecificRequest(option.id)}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  specificRequests.includes(option.id)
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-slate-200 hover:border-blue-300'
+                }`}
+              >
+                <div className='flex items-start gap-2'>
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                      specificRequests.includes(option.id)
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-slate-300'
+                    }`}
+                  >
+                    {specificRequests.includes(option.id) && (
+                      <Check className='w-3 h-3 text-white' />
+                    )}
+                  </div>
+                  <div className='flex-1'>
+                    <p className='font-semibold text-slate-900 text-sm'>
+                      {option.label}
+                    </p>
+                    <p className='text-xs text-slate-600'>{option.desc}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Information Requests */}
+      {(requestType === 'information' || requestType === 'both') && (
+        <div>
+          <label className='block text-sm font-semibold text-slate-700 mb-3'>
+            Information Requests
+          </label>
+          <div className='grid md:grid-cols-2 gap-3'>
+            {informationOptions.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => toggleSpecificRequest(option.id)}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  specificRequests.includes(option.id)
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-slate-200 hover:border-purple-300'
+                }`}
+              >
+                <div className='flex items-start gap-2'>
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                      specificRequests.includes(option.id)
+                        ? 'border-purple-500 bg-purple-500'
+                        : 'border-slate-300'
+                    }`}
+                  >
+                    {specificRequests.includes(option.id) && (
+                      <Check className='w-3 h-3 text-white' />
+                    )}
+                  </div>
+                  <div className='flex-1'>
+                    <p className='font-semibold text-slate-900 text-sm'>
+                      {option.label}
+                    </p>
+                    <p className='text-xs text-slate-600'>{option.desc}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Instructions */}
+      <div>
+        <label className='block text-sm font-semibold text-slate-700 mb-2'>
+          Custom Instructions (Optional)
+        </label>
+        <textarea
+          value={customInstructions}
+          onChange={(e) => setCustomInstructions(e.target.value)}
+          placeholder='Any specific instructions or questions about your package...'
+          rows={4}
+          className='w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none'
+        />
+      </div>
+    </div>
+  );
+
+  // Step 3: Review
   const Step3ReviewConfirm = () => {
     const selectedPkg = availablePackages.find((p) => p.id === selectedPackage);
     const totalCost = calculateCost();
@@ -273,6 +523,42 @@ export default function RequestInfoPage() {
           </div>
         )}
 
+        {/* Request Details */}
+        <div className='bg-white rounded-xl border border-slate-200 p-6'>
+          <h4 className='font-bold text-slate-900 mb-4'>Request Details</h4>
+          <div className='space-y-3 text-sm'>
+            <div className='flex justify-between'>
+              <span className='text-slate-600'>Type:</span>
+              <span className='font-semibold text-slate-900 capitalize'>
+                {requestType}
+              </span>
+            </div>
+            {(requestType === 'photos' || requestType === 'both') && (
+              <div className='flex justify-between'>
+                <span className='text-slate-600'>Additional Photos:</span>
+                <span className='font-semibold text-slate-900'>
+                  {additionalPhotos}
+                </span>
+              </div>
+            )}
+            {specificRequests.length > 0 && (
+              <div>
+                <p className='text-slate-600 mb-2'>Specific Requests:</p>
+                <div className='flex flex-wrap gap-2'>
+                  {specificRequests.map((req) => (
+                    <span
+                      key={req}
+                      className='px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold'
+                    >
+                      {req}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Cost Summary */}
         <div className='bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200 p-6'>
           <h4 className='font-bold text-slate-900 mb-4'>Cost Summary</h4>
@@ -280,7 +566,7 @@ export default function RequestInfoPage() {
             {(requestType === 'photos' || requestType === 'both') && (
               <div className='flex justify-between text-sm'>
                 <span className='text-slate-700'>
-                  Photos ({additionalPhotos}x @ 20 MAD)
+                  Photos ({additionalPhotos}x @ {PHOTO_REQUEST_COST} MAD)
                 </span>
                 <span className='font-semibold text-slate-900'>
                   {additionalPhotos * PHOTO_REQUEST_COST} MAD
@@ -312,7 +598,7 @@ export default function RequestInfoPage() {
     );
   };
 
-  // Step 4: Payment Confirmation (NEW)
+  // Step 4: Payment
   const Step4PaymentConfirmation = () => {
     const totalCost = calculateCost();
 
@@ -403,7 +689,7 @@ export default function RequestInfoPage() {
     );
   };
 
-  // Step 5: Final Confirmation (updated from step 4)
+  // Step 5: Confirmation
   const Step5Confirmation = () => {
     const requestId =
       photoRequestId || `REQ-${Date.now().toString().slice(-6)}`;
@@ -477,125 +763,117 @@ export default function RequestInfoPage() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          Back to Packages
+          Back to Profile
         </motion.button>
       </div>
     );
   };
 
-  // Keep Step1SelectPackage and Step2SpecifyRequests from original (document 23)
-  // ... Add those steps here exactly as they were ...
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className='fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center p-6 overflow-y-auto'
-    >
+    <DashboardLayout activeSection='packages'>
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
-        className='bg-gradient-to-br from-slate-50 to-blue-50 rounded-3xl max-w-4xl w-full shadow-2xl my-8'
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className='max-w-4xl mx-auto'
       >
-        {/* Header */}
-        <div className='bg-white border-b border-slate-200 p-6 rounded-t-3xl'>
-          <div className='flex items-center justify-between mb-4'>
-            <div>
-              <h2 className='text-2xl font-bold text-slate-900'>
-                Request Photos & Information
-              </h2>
-              <p className='text-slate-600'>
-                Step {currentStep} of {totalSteps}
-              </p>
+        <div className='bg-gradient-to-br from-slate-50 to-blue-50 rounded-3xl shadow-2xl'>
+          {/* Header */}
+          <div className='bg-white border-b border-slate-200 p-6 rounded-t-3xl'>
+            <div className='flex items-center justify-between mb-4'>
+              <div>
+                <h2 className='text-2xl font-bold text-slate-900'>
+                  Request Photos & Information
+                </h2>
+                <p className='text-slate-600'>
+                  Step {currentStep} of {totalSteps}
+                </p>
+              </div>
+              <button
+                onClick={handleClose}
+                className='p-2 hover:bg-slate-100 rounded-lg transition-colors'
+                disabled={submitting || confirmingPayment}
+              >
+                <X className='w-6 h-6' />
+              </button>
             </div>
-            <button
-              onClick={handleClose}
-              className='p-2 hover:bg-slate-100 rounded-lg transition-colors'
-              disabled={submitting || confirmingPayment}
-            >
-              <X className='w-6 h-6' />
-            </button>
-          </div>
 
-          {/* Progress Bar */}
-          <div className='relative'>
-            <div className='h-2 bg-slate-200 rounded-full overflow-hidden'>
-              <motion.div
-                className='h-full bg-gradient-to-r from-blue-600 to-purple-600'
-                initial={{ width: 0 }}
-                animate={{ width: `${(currentStep / totalSteps) * 100}%` }}
-                transition={{ duration: 0.3 }}
-              />
+            {/* Progress Bar */}
+            <div className='relative'>
+              <div className='h-2 bg-slate-200 rounded-full overflow-hidden'>
+                <motion.div
+                  className='h-full bg-gradient-to-r from-blue-600 to-purple-600'
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(currentStep / totalSteps) * 100}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className='p-6 max-h-[60vh] overflow-y-auto'>
-          <AnimatePresence mode='wait'>
-            {currentStep === 1 && (
-              <div key='step1'>{/* Step1SelectPackage */}</div>
-            )}
-            {currentStep === 2 && (
-              <div key='step2'>{/* Step2SpecifyRequests */}</div>
-            )}
-            {currentStep === 3 && <Step3ReviewConfirm key='step3' />}
-            {currentStep === 4 && <Step4PaymentConfirmation key='step4' />}
-            {currentStep === 5 && <Step5Confirmation key='step5' />}
-          </AnimatePresence>
-        </div>
-
-        {/* Footer Navigation */}
-        {currentStep < 4 && (
-          <div className='bg-white border-t border-slate-200 p-6 rounded-b-3xl flex justify-between'>
-            <motion.button
-              onClick={prevStep}
-              disabled={currentStep === 1 || submitting}
-              className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 ${
-                currentStep === 1 || submitting
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              }`}
-              whileHover={currentStep > 1 && !submitting ? { scale: 1.05 } : {}}
-              whileTap={currentStep > 1 && !submitting ? { scale: 0.95 } : {}}
-            >
-              <ChevronLeft className='w-5 h-5' />
-              Back
-            </motion.button>
-
-            <motion.button
-              onClick={currentStep === 3 ? handleSubmit : nextStep}
-              disabled={!canProceed() || submitting}
-              className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 ${
-                canProceed() && !submitting
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              }`}
-              whileHover={canProceed() && !submitting ? { scale: 1.05 } : {}}
-              whileTap={canProceed() && !submitting ? { scale: 0.95 } : {}}
-            >
-              {submitting ? (
-                <>
-                  <div className='w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' />
-                  Processing...
-                </>
-              ) : currentStep === 3 ? (
-                <>
-                  <Zap className='w-5 h-5' />
-                  Create Request
-                </>
-              ) : (
-                <>
-                  Continue
-                  <ChevronRight className='w-5 h-5' />
-                </>
-              )}
-            </motion.button>
+          {/* Content */}
+          <div className='p-6 max-h-[60vh] overflow-y-auto'>
+            <AnimatePresence mode='wait'>
+              {currentStep === 1 && <Step1SelectPackage key='step1' />}
+              {currentStep === 2 && <Step2SpecifyRequests key='step2' />}
+              {currentStep === 3 && <Step3ReviewConfirm key='step3' />}
+              {currentStep === 4 && <Step4PaymentConfirmation key='step4' />}
+              {currentStep === 5 && <Step5Confirmation key='step5' />}
+            </AnimatePresence>
           </div>
-        )}
+
+          {/* Footer Navigation */}
+          {currentStep < 4 && (
+            <div className='bg-white border-t border-slate-200 p-6 rounded-b-3xl flex justify-between'>
+              <motion.button
+                onClick={prevStep}
+                disabled={currentStep === 1 || submitting}
+                className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 ${
+                  currentStep === 1 || submitting
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
+                whileHover={
+                  currentStep > 1 && !submitting ? { scale: 1.05 } : {}
+                }
+                whileTap={currentStep > 1 && !submitting ? { scale: 0.95 } : {}}
+              >
+                <ChevronLeft className='w-5 h-5' />
+                Back
+              </motion.button>
+
+              <motion.button
+                onClick={currentStep === 3 ? handleSubmit : nextStep}
+                disabled={!canProceed() || submitting}
+                className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 ${
+                  canProceed() && !submitting
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+                whileHover={canProceed() && !submitting ? { scale: 1.05 } : {}}
+                whileTap={canProceed() && !submitting ? { scale: 0.95 } : {}}
+              >
+                {submitting ? (
+                  <>
+                    <div className='w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' />
+                    Processing...
+                  </>
+                ) : currentStep === 3 ? (
+                  <>
+                    <Zap className='w-5 h-5' />
+                    Create Request
+                  </>
+                ) : (
+                  <>
+                    Continue
+                    <ChevronRight className='w-5 h-5' />
+                  </>
+                )}
+              </motion.button>
+            </div>
+          )}
+        </div>
       </motion.div>
-    </motion.div>
+    </DashboardLayout>
   );
 }

@@ -3,6 +3,7 @@ import PublicRoute from '@/components/auth/PublicRoute';
 import LoadingScreen from '@/components/common/LoadingScreen';
 import AuthLayout from '@/layouts/Authlayout';
 import MainLayout from '@/layouts/MainLayout';
+import AdminPhotoRequestsPage from '@/pages/admin/AdminPhotoRequestsPage';
 import { lazy, Suspense, type ElementType } from 'react';
 import { Link, useRoutes } from 'react-router-dom';
 
@@ -288,6 +289,14 @@ export default function Router() {
       element: (
         <ProtectedRoute requireAdmin>
           <AdminTransactionsPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: 'admin/photo-requests',
+      element: (
+        <ProtectedRoute requireAdmin>
+          <AdminPhotoRequestsPage />
         </ProtectedRoute>
       ),
     },
