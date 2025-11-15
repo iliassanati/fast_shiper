@@ -1,10 +1,10 @@
-import AuthLayout from '@/layouts/Authlayout';
-import LoadingScreen from '@/components/common/LoadingScreen';
-import MainLayout from '@/layouts/MainLayout';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import PublicRoute from '@/components/auth/PublicRoute';
+import LoadingScreen from '@/components/common/LoadingScreen';
+import AuthLayout from '@/layouts/Authlayout';
+import MainLayout from '@/layouts/MainLayout';
 import { lazy, Suspense, type ElementType } from 'react';
-import { useRoutes, Link } from 'react-router-dom';
+import { Link, useRoutes } from 'react-router-dom';
 
 // -------------------------------------------------------------------------
 // LOADING COMPONENT

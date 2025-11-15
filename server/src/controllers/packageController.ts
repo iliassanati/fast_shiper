@@ -17,6 +17,13 @@ import {
   sendForbidden,
 } from '../utils/responses.js';
 
+const isPackageOwner = (
+  packageUserId: Types.ObjectId,
+  authUserId: string
+): boolean => {
+  return packageUserId.toString() === authUserId;
+};
+
 /**
  * Get all packages for current user
  * GET /api/packages
@@ -94,8 +101,15 @@ export const getPackageById = async (
       return;
     }
 
-    // CRITICAL: Check ownership - user can only see their own packages
-    if (pkg.userId.toString() !== req.user.userId) {
+    // 🔥 FIX: Better ownership check with logging
+    console.log('🔍 Checking package ownership:', {
+      packageUserId: pkg.userId.toString(),
+      authUserId: req.user.userId,
+      match: pkg.userId.toString() === req.user.userId,
+    });
+
+    if (!isPackageOwner(pkg.userId, req.user.userId)) {
+      console.log('❌ Access denied - package ownership mismatch');
       sendForbidden(res, 'Access denied to this package');
       return;
     }

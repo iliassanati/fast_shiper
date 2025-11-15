@@ -168,22 +168,33 @@ export default function RequestInfoPage() {
         customInstructions,
       };
 
+      console.log('📸 Request data:', requestData);
+
       const response = await apiHelpers.post('/photo-requests', requestData);
 
       console.log('✅ Photo request created:', response);
 
       addNotification(
-        'Photo request submitted successfully! We will process it within 1 business day.',
+        `Photo request submitted! Cost: ${
+          response.photoRequest.cost.total
+        } MAD (~$${(response.photoRequest.cost.total / 10).toFixed(2)})`,
         'success'
       );
 
       setCurrentStep(4); // Move to confirmation step
     } catch (error: any) {
       console.error('❌ Error creating photo request:', error);
-      addNotification(
-        error.response?.data?.error || 'Failed to submit photo request',
-        'error'
-      );
+
+      // Better error messages
+      let errorMessage = 'Failed to submit photo request';
+
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      addNotification(errorMessage, 'error');
     } finally {
       setSubmitting(false);
     }

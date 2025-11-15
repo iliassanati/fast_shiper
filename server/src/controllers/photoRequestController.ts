@@ -1,4 +1,4 @@
-// server/src/controllers/photoRequestController.ts
+// server/src/controllers/photoRequestController.ts - FIXED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest, CreatePhotoRequestDTO } from '../types/index.js';
 import {
@@ -35,6 +35,8 @@ export const getPhotoRequests = async (
 
     const { status, page = 1, limit = 20 } = req.query;
 
+    console.log('📸 Fetching photo requests for user:', req.user.userId);
+
     const filters = {
       status: status as string | undefined,
       skip: (Number(page) - 1) * Number(limit),
@@ -45,10 +47,13 @@ export const getPhotoRequests = async (
       req.user.userId,
       filters
     );
+
     const total = await PhotoRequest.countDocuments({
       userId: req.user.userId,
       ...(status && { status }),
     });
+
+    console.log('✅ Found', photoRequests.length, 'photo requests');
 
     sendSuccess(res, {
       photoRequests,
@@ -60,6 +65,7 @@ export const getPhotoRequests = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching photo requests:', error);
     next(error);
   }
 };
@@ -87,14 +93,19 @@ export const getPhotoRequestById = async (
       return;
     }
 
-    // Check ownership
+    // 🔥 FIX: Proper ObjectId comparison
     if (photoRequest.userId.toString() !== req.user.userId) {
+      console.log('❌ Access denied - User ID mismatch:', {
+        requestUserId: photoRequest.userId.toString(),
+        authUserId: req.user.userId,
+      });
       sendForbidden(res, 'Access denied');
       return;
     }
 
     sendSuccess(res, { photoRequest });
   } catch (error) {
+    console.error('❌ Error fetching photo request:', error);
     next(error);
   }
 };
@@ -110,30 +121,66 @@ export const createNewPhotoRequest = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const requestData: CreatePhotoRequestDTO = req.body;
 
-    // Validate package exists and belongs to user
+    console.log('📸 Creating photo request:', {
+      userId: req.user.userId,
+      packageId: requestData.packageId,
+    });
+
+    // Validate package exists
     const pkg = await findPackageById(requestData.packageId);
 
     if (!pkg) {
+      console.log('❌ Package not found:', requestData.packageId);
       sendNotFound(res, 'Package not found');
       return;
     }
 
-    if (pkg.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied to package');
+    // 🔥 FIX: Handle both populated and non-populated userId
+    // If userId is populated (has _id property), use _id, otherwise use userId directly
+    const packageUserId = (pkg.userId as any)._id
+      ? (pkg.userId as any)._id.toString()
+      : pkg.userId.toString();
+
+    const requestUserId = req.user.userId.toString();
+
+    console.log('🔍 Ownership check:', {
+      packageUserId,
+      requestUserId,
+      match: packageUserId === requestUserId,
+    });
+
+    if (packageUserId !== requestUserId) {
+      console.log('❌ Access denied - package ownership mismatch');
+      sendForbidden(res, 'This package does not belong to you');
       return;
     }
 
-    // Calculate costs
+    console.log('✅ Ownership verified');
+
+    // Check package status
+    if (pkg.status !== 'received') {
+      console.log('❌ Invalid package status:', pkg.status);
+      sendError(
+        res,
+        'Photo requests can only be made for packages in storage',
+        400
+      );
+      return;
+    }
+
+    // Calculate costs - $2 per photo = 20 MAD per photo
     const costs = calculatePhotoRequestCost(
       requestData.additionalPhotos,
       requestData.requestType
     );
+
+    console.log('💰 Calculated costs:', costs);
 
     // Create photo request
     const photoRequest = await createPhotoRequest({
@@ -147,7 +194,9 @@ export const createNewPhotoRequest = async (
       cost: costs,
     });
 
-    // Create transaction
+    console.log('✅ Photo request created:', photoRequest._id);
+
+    // Create transaction for payment
     await createTransaction({
       userId: req.user.userId,
       type: 'photo_request',
@@ -159,28 +208,33 @@ export const createNewPhotoRequest = async (
         currency: 'MAD',
       },
       paymentMethod: 'card',
-      description: `Photo request for package ${pkg.description}`,
+      description: `Photo request for package - ${requestData.additionalPhotos} photos`,
     });
+
+    console.log('✅ Transaction created');
 
     // Create notification
     await createNotification({
       userId: req.user.userId,
       type: 'photo_request_complete',
       title: 'Photo Request Received',
-      message: `Your photo request for ${pkg.description} has been received and will be processed shortly.`,
+      message: `Your photo request has been received. We'll process it within 1 business day.`,
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
       priority: 'normal',
-      actionUrl: `/photo-requests/${photoRequest._id}`,
+      actionUrl: `/profile`,
     });
+
+    console.log('✅ Notification created');
 
     sendSuccess(
       res,
       { photoRequest },
-      'Photo request created successfully',
+      `Photo request created successfully. Cost: ${costs.total} MAD (~$${(costs.total / 10).toFixed(2)})`,
       201
     );
   } catch (error) {
+    console.error('❌ Error creating photo request:', error);
     next(error);
   }
 };
@@ -203,6 +257,8 @@ export const updatePhotoRequest = async (
     const { id } = req.params;
     const { status, photos, informationReport } = req.body;
 
+    console.log('📸 Updating photo request:', id, 'Status:', status);
+
     const photoRequest = await findPhotoRequestById(id);
 
     if (!photoRequest) {
@@ -216,32 +272,51 @@ export const updatePhotoRequest = async (
       if (status === 'completed') {
         photoRequest.completedAt = new Date();
 
+        console.log('✅ Photo request completed');
+
         // Create notification
         await createNotification({
           userId: photoRequest.userId,
           type: 'photo_request_complete',
-          title: 'Photo Request Complete',
-          message: `Your requested photos are now available!`,
+          title: 'Photos Ready!',
+          message: `Your requested photos are now available in your profile.`,
           relatedId: photoRequest._id,
           relatedModel: 'PhotoRequest',
           priority: 'high',
-          actionUrl: `/photo-requests/${photoRequest._id}`,
+          actionUrl: `/profile`,
         });
+
+        // Update transaction status to completed
+        const { Transaction } = await import('../models/Transaction.js');
+        await Transaction.findOneAndUpdate(
+          {
+            relatedId: photoRequest._id,
+            relatedModel: 'PhotoRequest',
+          },
+          { status: 'completed', completedAt: new Date() }
+        );
+
+        console.log('✅ Transaction marked as completed');
       }
     }
 
     if (photos) {
       photoRequest.photos = photos;
+      console.log('✅ Added', photos.length, 'photos');
     }
 
     if (informationReport) {
       photoRequest.informationReport = informationReport;
+      console.log('✅ Added information report');
     }
 
     await photoRequest.save();
 
+    console.log('✅ Photo request updated successfully');
+
     sendSuccess(res, { photoRequest }, 'Photo request updated successfully');
   } catch (error) {
+    console.error('❌ Error updating photo request:', error);
     next(error);
   }
 };

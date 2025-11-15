@@ -70,14 +70,16 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         console.log('📸 Fetching photo requests...');
+
         const response = await apiHelpers.get<{
           photoRequests: PhotoRequest[];
         }>('/photo-requests', { limit: 50 });
+
         console.log('✅ Photo requests loaded:', response.photoRequests.length);
         setPhotoRequests(response.photoRequests);
       } catch (error: any) {
         console.error('❌ Error fetching photo requests:', error);
-        // Don't throw error, just show empty state
+        // Show empty state instead of error for better UX
         setPhotoRequests([]);
       } finally {
         setLoading(false);
