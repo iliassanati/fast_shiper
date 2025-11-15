@@ -1,5 +1,4 @@
-// server/src/routes/admin/index.ts
-// UPDATED VERSION - Include transactions and tickets
+// server/src/routes/admin/index.ts - UPDATED WITH PHOTO REQUESTS
 import { Router } from 'express';
 import adminAuthRoutes from './adminAuthRoutes.js';
 import adminDashboardRoutes from './adminDashboardRoutes.js';
@@ -9,6 +8,7 @@ import adminShipmentRoutes from './adminShipmentRoutes.js';
 import adminUserRoutes from './adminUserRoutes.js';
 import adminTransactionRoutes from './adminTransactionRoutes.js';
 import adminTicketRoutes from './adminTicketRoutes.js';
+import adminPhotoRequestRoutes from './adminPhotoRequestRoutes.js'; // NEW
 
 const router = Router();
 
@@ -22,7 +22,8 @@ router.use('/packages', adminPackageRoutes);
 router.use('/consolidations', adminConsolidationRoutes);
 router.use('/shipments', adminShipmentRoutes);
 router.use('/users', adminUserRoutes);
-router.use('/transactions', adminTransactionRoutes); // NEW
-router.use('/tickets', adminTicketRoutes); // NEW
+router.use('/transactions', adminTransactionRoutes);
+router.use('/tickets', adminTicketRoutes);
+router.use('/photo-requests', adminPhotoRequestRoutes); // NEW
 
 export default router;
