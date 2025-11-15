@@ -1,8 +1,7 @@
-// server/src/controllers/admin/adminPhotoRequestController.ts - FULLY FIXED
+// server/src/controllers/admin/adminPhotoRequestController.ts - COMPLETE FIXED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import { PhotoRequest } from '../../models/PhotoRequest.js';
-import { Package } from '../../models/Package.js';
 import { createNotification } from '../../models/Notification.js';
 import {
   sendSuccess,
@@ -28,17 +27,17 @@ export const getAllPhotoRequests = async (
 
     const { status, search, page = 1, limit = 20 } = req.query;
 
-    console.log('📸 Admin fetching photo requests', { status, search });
+    console.log('📸 Admin fetching photo requests', {
+      status,
+      search,
+      page,
+      limit,
+    });
 
     const query: any = {};
 
-    if (status) {
+    if (status && status !== 'all') {
       query.status = status;
-    }
-
-    if (search) {
-      // Search in user name, package tracking number, etc.
-      // We'll do this with a more complex query after population
     }
 
     const photoRequests = await PhotoRequest.find(query)
@@ -47,6 +46,7 @@ export const getAllPhotoRequests = async (
       .sort({ createdAt: -1 })
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
+      .lean()
       .exec();
 
     const total = await PhotoRequest.countDocuments(query);
@@ -91,7 +91,8 @@ export const getPhotoRequestDetails = async (
 
     const photoRequest = await PhotoRequest.findById(id)
       .populate('userId', 'name email suiteNumber phone address')
-      .populate('packageId');
+      .populate('packageId')
+      .lean();
 
     if (!photoRequest) {
       sendNotFound(res, 'Photo request not found');
@@ -214,7 +215,8 @@ export const updatePhotoRequestStatus = async (
     // Reload with populated data
     const updatedPhotoRequest = await PhotoRequest.findById(id)
       .populate('userId', 'name email suiteNumber phone')
-      .populate('packageId', 'trackingNumber retailer description status');
+      .populate('packageId', 'trackingNumber retailer description status')
+      .lean();
 
     sendSuccess(
       res,
@@ -237,75 +239,112 @@ export const uploadPhotos = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    console.log('📸 ========================================');
+    console.log('📸 UPLOAD PHOTOS REQUEST RECEIVED');
+    console.log('📸 ========================================');
+
     if (!req.isAdmin) {
+      console.log('❌ Not admin');
       sendForbidden(res);
       return;
     }
 
     const { id } = req.params;
-    const { photos } = req.body; // Array of { url, description }
+    const { photos } = req.body;
 
     console.log(`📸 Admin uploading photos for request ${id}`);
+    console.log(`📸 Request body:`, JSON.stringify(req.body, null, 2));
     console.log(`📸 Number of photos:`, photos?.length || 0);
 
-    if (!Array.isArray(photos) || photos.length === 0) {
-      sendError(
-        res,
-        'Photos array is required and must contain at least one photo',
-        400
-      );
+    // Validation
+    if (!photos) {
+      console.log('❌ No photos in request body');
+      sendError(res, 'Photos array is required in request body', 400);
       return;
     }
 
-    // Validate photo format
-    for (const photo of photos) {
+    if (!Array.isArray(photos)) {
+      console.log('❌ Photos is not an array:', typeof photos);
+      sendError(res, 'Photos must be an array', 400);
+      return;
+    }
+
+    if (photos.length === 0) {
+      console.log('❌ Photos array is empty');
+      sendError(res, 'At least one photo is required', 400);
+      return;
+    }
+
+    // Validate each photo
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      console.log(`📸 Validating photo ${i + 1}:`, photo);
+
       if (!photo.url || typeof photo.url !== 'string') {
-        sendError(res, 'Each photo must have a valid URL', 400);
+        console.log(`❌ Invalid photo at index ${i}`);
+        sendError(res, `Photo at index ${i} must have a valid URL string`, 400);
+        return;
+      }
+
+      // Validate URL format
+      try {
+        new URL(photo.url);
+      } catch (e) {
+        console.log(`❌ Invalid URL format at index ${i}:`, photo.url);
+        sendError(res, `Photo at index ${i} has an invalid URL format`, 400);
         return;
       }
     }
 
+    console.log('✅ All photos validated');
+
+    // Find photo request
     const photoRequest = await PhotoRequest.findById(id).populate(
       'userId',
       'name email'
     );
 
     if (!photoRequest) {
+      console.log('❌ Photo request not found:', id);
       sendNotFound(res, 'Photo request not found');
       return;
     }
 
+    console.log('✅ Photo request found:', photoRequest._id);
+    console.log('   - Current status:', photoRequest.status);
+    console.log('   - Current photos count:', photoRequest.photos.length);
+
     // Check if request is in valid state for photo uploads
     if (photoRequest.status === 'cancelled') {
+      console.log('❌ Request is cancelled');
       sendError(res, 'Cannot add photos to cancelled request', 400);
       return;
     }
 
-    if (photoRequest.status === 'completed') {
-      console.log('⚠️ Adding photos to already completed request');
-    }
-
-    // Add photos
-    const uploadedPhotos = photos.map((photo: any) => ({
+    // Add photos with proper typing
+    const uploadedPhotos = photos.map((photo: any, index: number) => ({
       url: photo.url,
-      description: photo.description || '',
+      description: photo.description || `Photo ${index + 1}`,
       uploadedAt: new Date(),
     }));
 
+    console.log('📸 Adding photos to request:', uploadedPhotos.length);
+
     photoRequest.photos.push(...uploadedPhotos);
 
-    // If request was pending and payment was completed, move to processing
+    // Update status if needed
+    const oldStatus = photoRequest.status;
     if (photoRequest.status === 'pending') {
       photoRequest.status = 'processing';
       console.log(`✅ Status updated from pending to processing`);
     }
 
+    // Save
     await photoRequest.save();
 
-    console.log(`✅ Uploaded ${photos.length} photos for request ${id}`);
-    console.log(
-      `✅ Request now has ${photoRequest.photos.length} total photos`
-    );
+    console.log(`✅ Uploaded ${photos.length} photos successfully`);
+    console.log(`   - Total photos now: ${photoRequest.photos.length}`);
+    console.log(`   - Status: ${oldStatus} -> ${photoRequest.status}`);
 
     // Notify user
     await createNotification({
@@ -324,15 +363,27 @@ export const uploadPhotos = async (
     // Reload with populated data
     const updatedPhotoRequest = await PhotoRequest.findById(id)
       .populate('userId', 'name email suiteNumber phone')
-      .populate('packageId', 'trackingNumber retailer description status');
+      .populate('packageId', 'trackingNumber retailer description status')
+      .lean();
+
+    console.log('📸 ========================================');
+    console.log('📸 UPLOAD COMPLETE');
+    console.log('📸 ========================================');
 
     sendSuccess(
       res,
       { photoRequest: updatedPhotoRequest },
-      'Photos uploaded successfully'
+      `${photos.length} photo(s) uploaded successfully`
     );
   } catch (error) {
-    console.error('❌ Error uploading photos:', error);
+    console.error('❌ ========================================');
+    console.error('❌ ERROR UPLOADING PHOTOS');
+    console.error('❌ ========================================');
+    console.error('❌ Error:', error);
+    if (error instanceof Error) {
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
+    }
     next(error);
   }
 };
@@ -347,6 +398,10 @@ export const addInformationReport = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    console.log('📝 ========================================');
+    console.log('📝 ADD INFORMATION REPORT');
+    console.log('📝 ========================================');
+
     if (!req.isAdmin) {
       sendForbidden(res);
       return;
@@ -356,8 +411,10 @@ export const addInformationReport = async (
     const { report } = req.body;
 
     console.log(`📝 Admin adding information report for request ${id}`);
+    console.log(`📝 Report length: ${report?.length || 0} characters`);
 
     if (!report || typeof report !== 'string' || report.trim().length === 0) {
+      console.log('❌ Invalid report');
       sendError(res, 'Report text is required and cannot be empty', 400);
       return;
     }
@@ -368,12 +425,18 @@ export const addInformationReport = async (
     );
 
     if (!photoRequest) {
+      console.log('❌ Photo request not found');
       sendNotFound(res, 'Photo request not found');
       return;
     }
 
+    console.log('✅ Photo request found');
+    console.log('   - Request type:', photoRequest.requestType);
+    console.log('   - Current status:', photoRequest.status);
+
     // Check if request type includes information
     if (photoRequest.requestType === 'photos') {
+      console.log('❌ Request type is photos-only');
       sendError(
         res,
         'This photo request does not include information request',
@@ -384,13 +447,15 @@ export const addInformationReport = async (
 
     // Check if request is in valid state
     if (photoRequest.status === 'cancelled') {
+      console.log('❌ Request is cancelled');
       sendError(res, 'Cannot add report to cancelled request', 400);
       return;
     }
 
     photoRequest.informationReport = report.trim();
 
-    // If request was pending and payment was completed, move to processing
+    // Update status if needed
+    const oldStatus = photoRequest.status;
     if (photoRequest.status === 'pending') {
       photoRequest.status = 'processing';
       console.log(`✅ Status updated from pending to processing`);
@@ -398,7 +463,8 @@ export const addInformationReport = async (
 
     await photoRequest.save();
 
-    console.log(`✅ Information report added for request ${id}`);
+    console.log(`✅ Information report added`);
+    console.log(`   - Status: ${oldStatus} -> ${photoRequest.status}`);
 
     // Notify user
     await createNotification({
@@ -418,7 +484,12 @@ export const addInformationReport = async (
     // Reload with populated data
     const updatedPhotoRequest = await PhotoRequest.findById(id)
       .populate('userId', 'name email suiteNumber phone')
-      .populate('packageId', 'trackingNumber retailer description status');
+      .populate('packageId', 'trackingNumber retailer description status')
+      .lean();
+
+    console.log('📝 ========================================');
+    console.log('📝 REPORT ADDED SUCCESSFULLY');
+    console.log('📝 ========================================');
 
     sendSuccess(
       res,
@@ -426,7 +497,10 @@ export const addInformationReport = async (
       'Report added successfully'
     );
   } catch (error) {
-    console.error('❌ Error adding report:', error);
+    console.error('❌ ========================================');
+    console.error('❌ ERROR ADDING REPORT');
+    console.error('❌ ========================================');
+    console.error('❌ Error:', error);
     next(error);
   }
 };
@@ -449,24 +523,15 @@ export const getPhotoRequestStatistics = async (
     console.log('📊 Admin fetching photo request statistics');
 
     const [total, byStatus, avgPhotos, revenueData] = await Promise.all([
-      // Total photo requests
       PhotoRequest.countDocuments(),
-
-      // Requests by status
       PhotoRequest.aggregate([
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]),
-
-      // Average photos requested
       PhotoRequest.aggregate([
         { $group: { _id: null, avg: { $avg: '$additionalPhotos' } } },
       ]),
-
-      // Revenue from photo requests
       PhotoRequest.aggregate([
-        {
-          $match: { status: 'completed' },
-        },
+        { $match: { status: 'completed' } },
         {
           $group: {
             _id: null,
