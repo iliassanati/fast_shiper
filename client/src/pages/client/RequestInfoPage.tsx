@@ -1,26 +1,25 @@
 // client/src/pages/client/RequestInfoPage.tsx - COMPLETE WORKING VERSION
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { apiHelpers } from '@/lib/api';
+import { useNotificationStore, usePackageStore } from '@/stores';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Camera,
-  X,
-  ChevronRight,
-  ChevronLeft,
-  Check,
   AlertCircle,
-  Info,
-  FileText,
+  Camera,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
-  ArrowRight,
-  Plus,
-  Minus,
   Eye,
+  FileText,
+  Info,
+  Minus,
+  Plus,
   Search,
+  X,
   Zap,
 } from 'lucide-react';
-import { usePackageStore, useNotificationStore } from '@/stores';
-import { apiHelpers } from '@/lib/api';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type RequestType = 'photos' | 'information' | 'both';
 
@@ -37,11 +36,12 @@ export default function RequestInfoPage() {
   const [customInstructions, setCustomInstructions] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const totalSteps = 4;
   const FIRST_PHOTO_COST = 40;
   const ADDITIONAL_PHOTO_COST = 10;
-  const INFORMATION_COST = 10;
 
+  const totalSteps = 4;
+  const PHOTO_REQUEST_COST = 20; // $2 per photo = ~20 MAD
+  const INFORMATION_COST = 10;
   // Get available packages (received status only)
   const availablePackages = packages.filter((pkg) => pkg.status === 'received');
 
@@ -116,10 +116,8 @@ export default function RequestInfoPage() {
   const calculateCost = () => {
     let total = 0;
     if (requestType === 'photos' || requestType === 'both') {
-      total += FIRST_PHOTO_COST;
-      if (additionalPhotos > 1) {
-        total += (additionalPhotos - 1) * ADDITIONAL_PHOTO_COST;
-      }
+      // $2 per photo = 20 MAD per photo
+      total += additionalPhotos * PHOTO_REQUEST_COST;
     }
     if (requestType === 'information' || requestType === 'both') {
       total += INFORMATION_COST;
@@ -226,7 +224,7 @@ export default function RequestInfoPage() {
             Get more detailed photos of your package
           </p>
           <p className='text-xs text-blue-600 font-semibold'>
-            40 MAD + 10 MAD/photo
+            20 MAD per photo (~$2)
           </p>
         </motion.div>
 
@@ -299,6 +297,10 @@ export default function RequestInfoPage() {
               </p>
               <p className='text-sm text-slate-600'>
                 photo{additionalPhotos > 1 ? 's' : ''}
+              </p>
+              <p className='text-xs text-slate-500 mt-1'>
+                {additionalPhotos * PHOTO_REQUEST_COST} MAD (~$
+                {(additionalPhotos * 2).toFixed(2)})
               </p>
             </div>
 
@@ -661,24 +663,14 @@ export default function RequestInfoPage() {
           <h4 className='font-bold text-slate-900 mb-4'>Cost Summary</h4>
           <div className='space-y-3'>
             {(requestType === 'photos' || requestType === 'both') && (
-              <>
-                <div className='flex justify-between text-sm'>
-                  <span className='text-slate-700'>First photo</span>
-                  <span className='font-semibold text-slate-900'>
-                    {FIRST_PHOTO_COST} MAD
-                  </span>
-                </div>
-                {additionalPhotos > 1 && (
-                  <div className='flex justify-between text-sm'>
-                    <span className='text-slate-700'>
-                      Additional photos ({additionalPhotos - 1}x)
-                    </span>
-                    <span className='font-semibold text-slate-900'>
-                      {(additionalPhotos - 1) * ADDITIONAL_PHOTO_COST} MAD
-                    </span>
-                  </div>
-                )}
-              </>
+              <div className='flex justify-between text-sm'>
+                <span className='text-slate-700'>
+                  Photos ({additionalPhotos}x @ 20 MAD)
+                </span>
+                <span className='font-semibold text-slate-900'>
+                  {additionalPhotos * PHOTO_REQUEST_COST} MAD
+                </span>
+              </div>
             )}
 
             {(requestType === 'information' || requestType === 'both') && (

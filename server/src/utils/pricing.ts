@@ -37,30 +37,25 @@ export const calculateConsolidationCost = (
 export const calculatePhotoRequestCost = (
   additionalPhotos: number,
   requestType: 'photos' | 'information' | 'both'
-) => {
-  const FIRST_PHOTO_COST = 40; // MAD
-  const ADDITIONAL_PHOTO_COST = 10; // MAD per photo
-  const INFORMATION_COST = 10; // MAD
-
+): { photos: number; information: number; total: number; currency: string } => {
   let photosCost = 0;
   let informationCost = 0;
 
+  // NEW CODE - USE THIS:
   if (requestType === 'photos' || requestType === 'both') {
-    photosCost = FIRST_PHOTO_COST;
-    if (additionalPhotos > 1) {
-      photosCost += (additionalPhotos - 1) * ADDITIONAL_PHOTO_COST;
-    }
+    // $2 per photo = 20 MAD per photo
+    photosCost = additionalPhotos * 20;
   }
 
   if (requestType === 'information' || requestType === 'both') {
-    informationCost = INFORMATION_COST;
+    informationCost = 10;
   }
 
   return {
     photos: photosCost,
     information: informationCost,
     total: photosCost + informationCost,
-    currency: 'MAD' as const,
+    currency: 'MAD',
   };
 };
 
