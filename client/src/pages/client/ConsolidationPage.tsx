@@ -16,15 +16,7 @@ export default function ConsolidationPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const handleClose = () => {
-/*************  ✨ Windsurf Command ⭐  *************/
-  /**
-   * Submits the consolidation form and updates the selected packages to 'consolidated' status
-   * Refreshes the dashboard stats and adds a success notification
-   * Navigates back to the dashboard page
-   *
-   * @param {string[]} selectedPackageIds The IDs of the packages to consolidate
-   */
-/*******  bb2f7708-1f29-450e-8ae0-2eb19e451879  *******/    navigate('/dashboard');
+    navigate('/dashboard');
   };
 
   const handleSubmit = async (

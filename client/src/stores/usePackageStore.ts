@@ -137,16 +137,6 @@ export const usePackageStore = create<PackageState>()(
 
         // Transform backend data to frontend format
         const packages = response.packages.map((pkg: any, index: number) => {
-          console.log(
-            `🔄 Transforming package ${index + 1}/${response.packages.length}:`,
-            {
-              id: pkg._id || pkg.id,
-              description: pkg.description,
-              retailer: pkg.retailer,
-              status: pkg.status,
-            }
-          );
-
           return {
             id: pkg._id || pkg.id,
             description: pkg.description || 'No description',
