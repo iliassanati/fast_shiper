@@ -1,4 +1,4 @@
-// client/src/sections/workflows/ConsolidationWorkflow.tsx - FIXED VERSION
+// client/src/sections/workflows/ConsolidationWorkflow.tsx - COMPLETE VERSION
 import { CONSOLIDATION_PRICING } from '@/data/client/constants';
 import { usePackageStore } from '@/stores';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,7 +14,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ConsolidationWorkflowProps {
   onClose: () => void;
@@ -39,7 +39,23 @@ export default function ConsolidationWorkflow({
   const [requestUnpackedPhotos, setRequestUnpackedPhotos] = useState(false);
 
   // Get real packages from store
-  const { packages } = usePackageStore();
+  const { packages, fetchPackages } = usePackageStore();
+
+  // 🔥 CRITICAL FIX: Fetch packages when workflow opens
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        console.log('📦 Loading packages for consolidation...');
+        await fetchPackages({ limit: 100 });
+      } catch (error) {
+        console.error('❌ Error loading packages:', error);
+      }
+    };
+
+    if (packages.length === 0) {
+      loadPackages();
+    }
+  }, [fetchPackages, packages.length]);
 
   // Filter only packages that can be consolidated (received status)
   const availablePackages = packages.filter((pkg) => pkg.status === 'received');
@@ -139,6 +155,9 @@ export default function ConsolidationWorkflow({
         requestUnpackedPhotos,
       };
       onSubmit(selectedPackages, preferences, specialInstructions);
+
+      // Move to confirmation step
+      setCurrentStep(4);
     }
   };
 
@@ -299,10 +318,9 @@ export default function ConsolidationWorkflow({
     </div>
   );
 
-  // Step 2: Consolidation Options (keep same as before)
+  // Step 2: Consolidation Options
   const Step2Options = () => (
     <div className='space-y-4'>
-      {/* Same content as original - options for packaging, protection, photos */}
       <div className='mb-6'>
         <h3 className='text-2xl font-bold text-slate-900 mb-2'>
           Consolidation Preferences
@@ -466,8 +484,230 @@ export default function ConsolidationWorkflow({
     </div>
   );
 
-  // Step 3 & 4 - Keep same as original
-  // ... (Review and Confirmation steps remain the same)
+  // Step 3: Review
+  const Step3Review = () => {
+    const selectedPkgs = availablePackages.filter((pkg) =>
+      selectedPackages.includes(pkg.id)
+    );
+
+    return (
+      <div className='space-y-4'>
+        <div className='mb-6'>
+          <h3 className='text-2xl font-bold text-slate-900 mb-2'>
+            Review Your Consolidation
+          </h3>
+          <p className='text-slate-600'>
+            Please review all details before submitting
+          </p>
+        </div>
+
+        {/* Selected Packages Summary */}
+        <div className='bg-white rounded-xl border border-slate-200 p-6'>
+          <h4 className='font-bold text-slate-900 mb-4'>
+            Selected Packages ({selectedPkgs.length})
+          </h4>
+          <div className='space-y-3'>
+            {selectedPkgs.map((pkg) => (
+              <div
+                key={pkg.id}
+                className='flex items-center gap-3 p-3 bg-slate-50 rounded-lg'
+              >
+                <div className='text-3xl'>{pkg.photo}</div>
+                <div className='flex-1'>
+                  <p className='font-semibold text-slate-900'>
+                    {pkg.description}
+                  </p>
+                  <p className='text-sm text-slate-600'>
+                    {pkg.retailer} • {pkg.weight} • {pkg.dimensions}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Preferences Summary */}
+        <div className='bg-white rounded-xl border border-slate-200 p-6'>
+          <h4 className='font-bold text-slate-900 mb-4'>Your Preferences</h4>
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between p-3 bg-slate-50 rounded-lg'>
+              <span className='text-slate-700'>Remove Extra Packaging</span>
+              <span className='font-semibold text-slate-900'>
+                {removePackaging ? 'Yes' : 'No'}
+              </span>
+            </div>
+            <div className='flex items-center justify-between p-3 bg-slate-50 rounded-lg'>
+              <span className='text-slate-700'>Add Extra Protection</span>
+              <span className='font-semibold text-slate-900'>
+                {addProtection ? 'Yes' : 'No'}
+              </span>
+            </div>
+            <div className='flex items-center justify-between p-3 bg-slate-50 rounded-lg'>
+              <span className='text-slate-700'>Request Unpacked Photos</span>
+              <span className='font-semibold text-slate-900'>
+                {requestUnpackedPhotos ? 'Yes' : 'No'}
+              </span>
+            </div>
+          </div>
+
+          {specialInstructions && (
+            <div className='mt-4 p-3 bg-blue-50 rounded-lg'>
+              <p className='text-sm font-semibold text-blue-900 mb-1'>
+                Special Instructions:
+              </p>
+              <p className='text-sm text-blue-800'>{specialInstructions}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Cost Breakdown */}
+        <div className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 p-6'>
+          <h4 className='font-bold text-green-900 mb-4'>Cost Breakdown</h4>
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between text-slate-700'>
+              <span>
+                Consolidation Fee ({selectedPackages.length} packages)
+              </span>
+              <span className='font-semibold'>
+                {Math.min(
+                  selectedPackages.length *
+                    CONSOLIDATION_PRICING.FEE_PER_PACKAGE,
+                  CONSOLIDATION_PRICING.MAX_FEE
+                )}{' '}
+                MAD
+              </span>
+            </div>
+
+            {addProtection && (
+              <div className='flex items-center justify-between text-slate-700'>
+                <span>Extra Protection</span>
+                <span className='font-semibold'>
+                  {CONSOLIDATION_PRICING.EXTRA_PROTECTION_FEE} MAD
+                </span>
+              </div>
+            )}
+
+            {requestUnpackedPhotos && (
+              <div className='flex items-center justify-between text-slate-700'>
+                <span>Unpacked Photos</span>
+                <span className='font-semibold'>
+                  {CONSOLIDATION_PRICING.UNPACKED_PHOTOS_FEE} MAD
+                </span>
+              </div>
+            )}
+
+            <div className='pt-3 mt-3 border-t-2 border-green-300 flex items-center justify-between'>
+              <span className='text-lg font-bold text-green-900'>
+                Total Cost
+              </span>
+              <span className='text-2xl font-bold text-green-900'>
+                {calculateConsolidationFee()} MAD
+              </span>
+            </div>
+
+            <div className='flex items-center justify-between text-green-700 pt-2'>
+              <span className='flex items-center gap-2'>
+                <TrendingDown className='w-5 h-5' />
+                <span className='font-semibold'>Estimated Savings</span>
+              </span>
+              <span className='text-xl font-bold'>
+                ~{calculateSavings()} MAD
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Processing Info */}
+        <div className='bg-blue-50 rounded-xl p-4 flex items-start gap-3'>
+          <Clock className='w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5' />
+          <div className='text-sm text-blue-900'>
+            <p className='font-semibold mb-1'>What happens next?</p>
+            <ul className='space-y-1 list-disc list-inside'>
+              <li>
+                Your packages will be consolidated within 2-4 business days
+              </li>
+              <li>You'll receive photos and updates via email</li>
+              <li>Once ready, you can ship your consolidated package</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Step 4: Confirmation
+  const Step4Confirmation = () => (
+    <div className='space-y-4 text-center py-8'>
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', duration: 0.5 }}
+        className='w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6'
+      >
+        <Check className='w-12 h-12 text-green-600' />
+      </motion.div>
+
+      <h3 className='text-3xl font-bold text-slate-900'>
+        Consolidation Request Submitted!
+      </h3>
+
+      <p className='text-lg text-slate-600 max-w-md mx-auto'>
+        Your consolidation request has been received. We'll start processing
+        your packages shortly.
+      </p>
+
+      <div className='bg-blue-50 rounded-xl p-6 max-w-md mx-auto text-left'>
+        <h4 className='font-bold text-blue-900 mb-3'>What's Next?</h4>
+        <div className='space-y-3'>
+          <div className='flex items-start gap-3'>
+            <div className='w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+              <span className='text-white text-xs font-bold'>1</span>
+            </div>
+            <div>
+              <p className='font-semibold text-blue-900'>Processing</p>
+              <p className='text-sm text-blue-800'>
+                We'll consolidate your packages within 2-4 business days
+              </p>
+            </div>
+          </div>
+
+          <div className='flex items-start gap-3'>
+            <div className='w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+              <span className='text-white text-xs font-bold'>2</span>
+            </div>
+            <div>
+              <p className='font-semibold text-blue-900'>Notification</p>
+              <p className='text-sm text-blue-800'>
+                You'll receive an email when consolidation is complete
+              </p>
+            </div>
+          </div>
+
+          <div className='flex items-start gap-3'>
+            <div className='w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5'>
+              <span className='text-white text-xs font-bold'>3</span>
+            </div>
+            <div>
+              <p className='font-semibold text-blue-900'>Ready to Ship</p>
+              <p className='text-sm text-blue-800'>
+                Your consolidated package will be ready for international
+                shipping
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <motion.button
+        onClick={onClose}
+        className='mt-8 px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full font-bold shadow-lg'
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        Return to Dashboard
+      </motion.button>
+    </div>
+  );
 
   return (
     <motion.div
@@ -518,9 +758,45 @@ export default function ConsolidationWorkflow({
         {/* Content */}
         <div className='p-6 max-h-[60vh] overflow-y-auto'>
           <AnimatePresence mode='wait'>
-            {currentStep === 1 && <Step1SelectPackages key='step1' />}
-            {currentStep === 2 && <Step2Options key='step2' />}
-            {/* Add Step3Review and Step4Confirmation here */}
+            {currentStep === 1 && (
+              <motion.div
+                key='step1'
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Step1SelectPackages />
+              </motion.div>
+            )}
+            {currentStep === 2 && (
+              <motion.div
+                key='step2'
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Step2Options />
+              </motion.div>
+            )}
+            {currentStep === 3 && (
+              <motion.div
+                key='step3'
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Step3Review />
+              </motion.div>
+            )}
+            {currentStep === 4 && (
+              <motion.div
+                key='step4'
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+              >
+                <Step4Confirmation />
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 

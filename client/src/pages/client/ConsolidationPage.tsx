@@ -1,3 +1,4 @@
+// client/src/pages/client/ConsolidationPage.tsx - FIXED VERSION
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ConsolidationWorkflow from '@/sections/workflows/ConsolidationWorkflow';
@@ -28,35 +29,63 @@ export default function ConsolidationPage() {
 
     setSubmitting(true);
     try {
-      // Call backend API to create consolidation
-      const response = await apiHelpers.post('/consolidations', {
+      console.log('📦 Creating consolidation request...', {
         packageIds: selectedPackageIds,
         preferences,
         specialInstructions,
       });
 
-      // Update local package statuses
-      selectedPackageIds.forEach((id) => {
-        updatePackage(id, { status: 'consolidated' });
+      // Call backend API to create consolidation
+      const response = await apiHelpers.post('/consolidations', {
+        packageIds: selectedPackageIds,
+        preferences,
+        specialInstructions: specialInstructions || '',
       });
 
+      console.log('✅ Consolidation created successfully:', response);
+
+      // Update local package statuses
+      for (const id of selectedPackageIds) {
+        updatePackage(id, { status: 'consolidated' });
+      }
+
       // Refresh data
-      await Promise.all([refreshStats(), fetchPackages()]);
+      await Promise.all([refreshStats(), fetchPackages({ limit: 100 })]);
 
       // Show success notification
-      addNotification(
-        `Successfully consolidated ${selectedPackageIds.length} packages!`,
-        'success'
-      );
+      addNotification({
+        id: Date.now().toString(),
+        type: 'consolidation_complete',
+        title: 'Consolidation Request Submitted',
+        message: `Successfully consolidated ${selectedPackageIds.length} packages! We'll start processing them within 2-4 business days.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+        actionUrl: '/dashboard',
+      });
 
-      // Navigate back
-      navigate('/dashboard');
+      console.log('✅ Consolidation flow completed');
+
+      // Don't navigate - let the workflow show confirmation step
     } catch (error: any) {
-      console.error('Error creating consolidation:', error);
-      addNotification(
-        error.response?.data?.error || 'Failed to consolidate packages',
-        'error'
-      );
+      console.error('❌ Error creating consolidation:', error);
+
+      const errorMessage =
+        error?.message ||
+        error?.response?.data?.error ||
+        'Failed to consolidate packages. Please try again.';
+
+      addNotification({
+        id: Date.now().toString(),
+        type: 'consolidation_complete',
+        title: 'Consolidation Failed',
+        message: errorMessage,
+        read: false,
+        createdAt: new Date().toISOString(),
+        actionUrl: '/dashboard',
+      });
+
+      // Show error alert as well
+      alert(errorMessage);
     } finally {
       setSubmitting(false);
     }

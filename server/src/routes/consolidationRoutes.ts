@@ -1,4 +1,4 @@
-// server/src/routes/consolidationRoutes.ts
+// server/src/routes/consolidationRoutes.ts - UPDATED
 import { Router } from 'express';
 import * as consolidationController from '../controllers/consolidationController.js';
 import { authenticate } from '../middleware/auth.js';
@@ -31,9 +31,16 @@ router.post('/', consolidationController.createConsolidationRequest);
 
 /**
  * @route   PUT /api/consolidations/:id
- * @desc    Update consolidation (status, photos, etc.)
+ * @desc    Update consolidation (users can only cancel pending ones)
  * @access  Private
  */
 router.put('/:id', consolidationController.updateConsolidation);
+
+/**
+ * @route   DELETE /api/consolidations/:id
+ * @desc    Cancel consolidation (only pending ones)
+ * @access  Private
+ */
+router.delete('/:id', consolidationController.cancelConsolidation);
 
 export default router;

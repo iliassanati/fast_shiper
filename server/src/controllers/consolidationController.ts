@@ -1,4 +1,4 @@
-// server/src/controllers/consolidationController.ts
+// server/src/controllers/consolidationController.ts - FIXED OWNERSHIP CHECK
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest, CreateConsolidationDTO } from '../types/index.js';
 import {
@@ -20,6 +20,18 @@ import {
 } from '../utils/responses.js';
 
 /**
+ * Helper function to extract userId from package (handles populated and non-populated)
+ */
+function getPackageUserId(pkg: any): string {
+  // If userId is populated (has _id property), use that
+  if (pkg.userId._id) {
+    return pkg.userId._id.toString();
+  }
+  // Otherwise, userId is the raw ObjectId
+  return pkg.userId.toString();
+}
+
+/**
  * Get all consolidations for current user
  * GET /api/consolidations
  */
@@ -30,11 +42,13 @@ export const getConsolidations = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { status, page = 1, limit = 20 } = req.query;
+
+    console.log('🔍 Fetching consolidations for user:', req.user.userId);
 
     const filters = {
       status: status as string | undefined,
@@ -42,14 +56,21 @@ export const getConsolidations = async (
       limit: Number(limit),
     };
 
+    // 🔥 FIX: Ensure we only get consolidations for THIS user
     const consolidations = await findConsolidationsByUser(
       req.user.userId,
       filters
     );
-    const total = await Consolidation.countDocuments({
-      userId: req.user.userId,
-      ...(status && { status }),
-    });
+
+    const countQuery: any = { userId: req.user.userId };
+    if (status) {
+      countQuery.status = status;
+    }
+    const total = await Consolidation.countDocuments(countQuery);
+
+    console.log(
+      `✅ Found ${consolidations.length} consolidations for user ${req.user.userId}`
+    );
 
     sendSuccess(res, {
       consolidations,
@@ -61,6 +82,7 @@ export const getConsolidations = async (
       },
     });
   } catch (error) {
+    console.error('❌ Error fetching consolidations:', error);
     next(error);
   }
 };
@@ -76,7 +98,7 @@ export const getConsolidationById = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -88,14 +110,22 @@ export const getConsolidationById = async (
       return;
     }
 
-    // Check ownership
+    // 🔥 FIX: Check ownership
+    console.log('🔍 Checking consolidation ownership:', {
+      consolidationUserId: consolidation.userId.toString(),
+      authUserId: req.user.userId,
+      match: consolidation.userId.toString() === req.user.userId,
+    });
+
     if (consolidation.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      console.log('❌ Access denied - consolidation ownership mismatch');
+      sendForbidden(res, 'Access denied to this consolidation');
       return;
     }
 
     sendSuccess(res, { consolidation });
   } catch (error) {
+    console.error('❌ Error fetching consolidation:', error);
     next(error);
   }
 };
@@ -111,11 +141,14 @@ export const createConsolidationRequest = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const consolidationData: CreateConsolidationDTO = req.body;
+
+    console.log('📦 Creating consolidation for user:', req.user.userId);
+    console.log('📦 Request data:', consolidationData);
 
     // Validate minimum packages
     if (consolidationData.packageIds.length < 2) {
@@ -133,15 +166,64 @@ export const createConsolidationRequest = async (
       return;
     }
 
-    if (packages.some((pkg) => pkg!.userId.toString() !== req.user!.userId)) {
-      sendForbidden(res, 'Access denied to one or more packages');
+    console.log('🔍 Checking package ownership...');
+    console.log('📦 Auth user ID:', req.user.userId);
+    console.log(
+      '📦 Package user IDs:',
+      packages.map((pkg) => ({
+        packageId: pkg!._id.toString(),
+        userId: getPackageUserId(pkg),
+        userInfo: pkg!.userId,
+      }))
+    );
+
+    // 🔥 CRITICAL FIX: Check ownership for ALL packages
+    // Handle both populated and non-populated userId
+    const unauthorized = packages.filter((pkg) => {
+      const pkgUserId = getPackageUserId(pkg);
+      const isOwner = pkgUserId === req.user!.userId;
+
+      if (!isOwner) {
+        console.log(
+          `❌ Package ${pkg!._id} - Owner: ${pkgUserId}, Auth User: ${req.user!.userId}`
+        );
+      }
+
+      return !isOwner;
+    });
+
+    if (unauthorized.length > 0) {
+      console.log(
+        '❌ Access denied - user does not own all packages:',
+        unauthorized.map((p) => ({
+          id: p!._id,
+          owner: getPackageUserId(p),
+          authUser: req.user!.userId,
+        }))
+      );
+      sendForbidden(
+        res,
+        'Access denied: You do not own one or more of these packages'
+      );
       return;
     }
+
+    console.log(
+      '✅ All packages owned by user - proceeding with consolidation'
+    );
 
     // Check if packages are available for consolidation
     const unavailable = packages.filter((pkg) => pkg!.status !== 'received');
     if (unavailable.length > 0) {
-      sendError(res, 'Some packages are not available for consolidation', 400);
+      console.log(
+        '❌ Some packages not available:',
+        unavailable.map((p) => ({ id: p!._id, status: p!.status }))
+      );
+      sendError(
+        res,
+        `Some packages are not available for consolidation. Only packages with "received" status can be consolidated.`,
+        400
+      );
       return;
     }
 
@@ -155,13 +237,15 @@ export const createConsolidationRequest = async (
       return sum + dims.length * dims.width * dims.height;
     }, 0);
 
-    // Calculate costs
+    // Calculate costs using pricing utility
     const costs = calculateConsolidationCost(
       packages.length,
-      consolidationData.preferences
+      consolidationData.preferences || {}
     );
 
-    // Calculate estimated completion (2-4 business days)
+    console.log('💰 Calculated costs:', costs);
+
+    // Calculate estimated completion (2-4 business days = 3 days average)
     const estimatedCompletion = new Date();
     estimatedCompletion.setDate(estimatedCompletion.getDate() + 3);
 
@@ -170,7 +254,12 @@ export const createConsolidationRequest = async (
       userId: req.user.userId,
       packageIds: consolidationData.packageIds,
       status: 'pending',
-      preferences: consolidationData.preferences,
+      preferences: {
+        removePackaging: consolidationData.preferences?.removePackaging ?? true,
+        addProtection: consolidationData.preferences?.addProtection ?? false,
+        requestUnpackedPhotos:
+          consolidationData.preferences?.requestUnpackedPhotos ?? false,
+      },
       specialInstructions: consolidationData.specialInstructions || '',
       estimatedCompletion,
       cost: costs,
@@ -188,12 +277,16 @@ export const createConsolidationRequest = async (
       },
     });
 
-    // Update package statuses
+    console.log('✅ Consolidation created:', consolidation._id);
+
+    // Update package statuses to "consolidated"
     await Promise.all(
       consolidationData.packageIds.map((id) =>
         updatePackageStatus(id, 'consolidated')
       )
     );
+
+    console.log('✅ Package statuses updated to "consolidated"');
 
     // Create transaction
     await createTransaction({
@@ -210,6 +303,8 @@ export const createConsolidationRequest = async (
       description: `Consolidation of ${packages.length} packages`,
     });
 
+    console.log('✅ Transaction created');
+
     // Create notification
     await createNotification({
       userId: req.user.userId,
@@ -222,6 +317,8 @@ export const createConsolidationRequest = async (
       actionUrl: `/consolidations/${consolidation._id}`,
     });
 
+    console.log('✅ Notification created');
+
     sendSuccess(
       res,
       { consolidation },
@@ -229,12 +326,13 @@ export const createConsolidationRequest = async (
       201
     );
   } catch (error) {
+    console.error('❌ Error creating consolidation:', error);
     next(error);
   }
 };
 
 /**
- * Update consolidation status
+ * Update consolidation status (admin mainly, but users can cancel)
  * PUT /api/consolidations/:id
  */
 export const updateConsolidation = async (
@@ -244,7 +342,7 @@ export const updateConsolidation = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -258,43 +356,109 @@ export const updateConsolidation = async (
       return;
     }
 
-    // Check ownership
+    // 🔥 FIX: Check ownership
     if (consolidation.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+      console.log('❌ Access denied - consolidation ownership mismatch');
+      sendForbidden(res, 'Access denied to this consolidation');
+      return;
+    }
+
+    // Users can only cancel their own consolidations if still pending
+    if (status && status !== 'cancelled') {
+      sendForbidden(
+        res,
+        'Users can only cancel pending consolidations. Other status updates are admin-only.'
+      );
       return;
     }
 
     // Update consolidation
-    if (status) {
-      await updateConsolidationStatus(id, status);
-    }
+    if (status === 'cancelled' && consolidation.status === 'pending') {
+      await updateConsolidationStatus(id, 'cancelled');
 
-    if (afterConsolidation) {
+      // Revert package statuses back to "received"
+      const packages = consolidation.packageIds as any[];
+      await Promise.all(
+        packages.map((pkgId) =>
+          updatePackageStatus(pkgId.toString(), 'received')
+        )
+      );
+
+      console.log('✅ Consolidation cancelled and packages reverted');
+    } else if (afterConsolidation) {
       consolidation.afterConsolidation = afterConsolidation;
-    }
-
-    if (resultingPackageId) {
+      await consolidation.save();
+    } else if (resultingPackageId) {
       consolidation.resultingPackageId = resultingPackageId as any;
-    }
-
-    await consolidation.save();
-
-    // Create notification if completed
-    if (status === 'completed') {
-      await createNotification({
-        userId: req.user.userId,
-        type: 'consolidation_complete',
-        title: 'Consolidation Complete',
-        message: `Your packages have been consolidated and are ready to ship!`,
-        relatedId: consolidation._id,
-        relatedModel: 'Consolidation',
-        priority: 'high',
-        actionUrl: `/consolidations/${consolidation._id}`,
-      });
+      await consolidation.save();
     }
 
     sendSuccess(res, { consolidation }, 'Consolidation updated successfully');
   } catch (error) {
+    console.error('❌ Error updating consolidation:', error);
+    next(error);
+  }
+};
+
+/**
+ * Cancel consolidation (user can cancel pending consolidations)
+ * DELETE /api/consolidations/:id
+ */
+export const cancelConsolidation = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendForbidden(res, 'Authentication required');
+      return;
+    }
+
+    const { id } = req.params;
+    const consolidation = await findConsolidationById(id);
+
+    if (!consolidation) {
+      sendNotFound(res, 'Consolidation not found');
+      return;
+    }
+
+    // Check ownership
+    if (consolidation.userId.toString() !== req.user.userId) {
+      sendForbidden(res, 'Access denied to this consolidation');
+      return;
+    }
+
+    // Can only cancel pending consolidations
+    if (consolidation.status !== 'pending') {
+      sendError(res, 'Only pending consolidations can be cancelled', 400);
+      return;
+    }
+
+    // Update status
+    await updateConsolidationStatus(id, 'cancelled');
+
+    // Revert package statuses
+    const packages = consolidation.packageIds as any[];
+    await Promise.all(
+      packages.map((pkgId) => updatePackageStatus(pkgId.toString(), 'received'))
+    );
+
+    // Create notification
+    await createNotification({
+      userId: req.user.userId,
+      type: 'consolidation_complete',
+      title: 'Consolidation Cancelled',
+      message: 'Your consolidation request has been cancelled.',
+      relatedId: consolidation._id,
+      relatedModel: 'Consolidation',
+      priority: 'normal',
+      actionUrl: '/packages',
+    });
+
+    sendSuccess(res, null, 'Consolidation cancelled successfully');
+  } catch (error) {
+    console.error('❌ Error cancelling consolidation:', error);
     next(error);
   }
 };
