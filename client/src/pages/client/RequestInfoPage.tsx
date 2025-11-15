@@ -1,4 +1,4 @@
-// client/src/pages/client/RequestInfoPage.tsx - COMPLETE WORKING VERSION
+// client/src/pages/client/RequestInfoPage.tsx - COMPLETE FIXED VERSION
 import { apiHelpers } from '@/lib/api';
 import { useNotificationStore, usePackageStore } from '@/stores';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -8,15 +8,9 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   CreditCard,
-  Eye,
   FileText,
-  Info,
-  Minus,
   Package,
-  Plus,
-  Search,
   X,
   Zap,
 } from 'lucide-react';
@@ -25,6 +19,32 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/layouts/DashboardLayout';
 
 type RequestType = 'photos' | 'information' | 'both';
+
+interface PhotoRequestResponse {
+  photoRequest: {
+    _id: string;
+    id: string;
+    userId: string;
+    packageId: string;
+    requestType: string;
+    status: string;
+    additionalPhotos: number;
+    cost: {
+      photos: number;
+      information: number;
+      total: number;
+      currency: string;
+    };
+    createdAt: string;
+  };
+  transaction: {
+    _id: string;
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+  };
+}
 
 export default function RequestInfoPage() {
   const navigate = useNavigate();
@@ -188,14 +208,22 @@ export default function RequestInfoPage() {
 
       console.log('📤 Request data:', requestData);
 
-      const response = await apiHelpers.post('/photo-requests', requestData);
+      const response = await apiHelpers.post<PhotoRequestResponse>(
+        '/photo-requests',
+        requestData
+      );
 
       console.log('✅ Photo request created:', response);
 
-      // Store the photo request ID
-      const requestId = response.photoRequest?._id || response.photoRequest?.id;
+      // Extract the photo request ID - try multiple possible paths
+      const requestId =
+        response.photoRequest?._id ||
+        response.photoRequest?.id ||
+        (response as any)._id ||
+        (response as any).id;
 
       if (!requestId) {
+        console.error('❌ No request ID in response:', response);
         throw new Error('No request ID returned from server');
       }
 
@@ -222,7 +250,13 @@ export default function RequestInfoPage() {
   };
 
   const handleConfirmPayment = async () => {
-    if (confirmingPayment || !photoRequestId) return;
+    if (confirmingPayment || !photoRequestId) {
+      console.error('❌ Cannot confirm payment:', {
+        confirmingPayment,
+        photoRequestId,
+      });
+      return;
+    }
 
     setConfirmingPayment(true);
     try {
@@ -380,7 +414,7 @@ export default function RequestInfoPage() {
               }
               className='w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-300 transition-colors'
             >
-              <Minus className='w-5 h-5' />
+              <X className='w-5 h-5' />
             </button>
             <div className='flex-1 text-center'>
               <p className='text-3xl font-bold text-slate-900'>
@@ -396,7 +430,7 @@ export default function RequestInfoPage() {
               }
               className='w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors'
             >
-              <Plus className='w-5 h-5' />
+              +
             </button>
           </div>
         </div>

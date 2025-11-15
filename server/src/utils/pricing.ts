@@ -34,21 +34,31 @@ export const calculateConsolidationCost = (
 /**
  * Calculate photo request cost
  */
+// server/src/utils/pricing.ts
+/**
+ * Calculate photo request costs
+ */
 export const calculatePhotoRequestCost = (
   additionalPhotos: number,
   requestType: 'photos' | 'information' | 'both'
-): { photos: number; information: number; total: number; currency: string } => {
+): {
+  photos: number;
+  information: number;
+  total: number;
+  currency: string;
+} => {
+  const PHOTO_COST = 20; // MAD per photo
+  const INFORMATION_COST = 10; // MAD
+
   let photosCost = 0;
   let informationCost = 0;
 
-  // NEW CODE - USE THIS:
   if (requestType === 'photos' || requestType === 'both') {
-    // $2 per photo = 20 MAD per photo
-    photosCost = additionalPhotos * 20;
+    photosCost = additionalPhotos * PHOTO_COST;
   }
 
   if (requestType === 'information' || requestType === 'both') {
-    informationCost = 10;
+    informationCost = INFORMATION_COST;
   }
 
   return {

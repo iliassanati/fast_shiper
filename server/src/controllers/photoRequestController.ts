@@ -1,6 +1,7 @@
-// server/src/controllers/photoRequestController.ts - COMPLETE VERSION WITH PAYMENT
+// server/src/controllers/photoRequestController.ts - FINAL FIXED VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest, CreatePhotoRequestDTO } from '../types/index.js';
+import mongoose from 'mongoose';
 import {
   PhotoRequest,
   createPhotoRequest,
@@ -19,6 +20,41 @@ import {
 } from '../utils/responses.js';
 
 /**
+ * Helper function to extract userId as string from potentially populated field
+ */
+const extractUserId = (userIdField: any): string => {
+  if (!userIdField) return '';
+
+  // If it's a populated object with _id
+  if (typeof userIdField === 'object' && userIdField._id) {
+    return userIdField._id.toString();
+  }
+
+  // If it's already a string
+  if (typeof userIdField === 'string') {
+    return userIdField;
+  }
+
+  // If it's an ObjectId
+  return userIdField.toString();
+};
+
+/**
+ * Helper function to compare user IDs
+ */
+const userIdsMatch = (userId1: any, userId2: any): boolean => {
+  const id1 = extractUserId(userId1);
+  const id2 = extractUserId(userId2);
+
+  console.log('🔍 Comparing user IDs:');
+  console.log('  - ID 1:', id1);
+  console.log('  - ID 2:', id2);
+  console.log('  - Match:', id1 === id2);
+
+  return id1 === id2;
+};
+
+/**
  * Get all photo requests for current user
  * GET /api/photo-requests
  */
@@ -29,7 +65,7 @@ export const getPhotoRequests = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -81,11 +117,18 @@ export const getPhotoRequestById = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      sendError(res, 'Invalid photo request ID', 400);
+      return;
+    }
+
     const photoRequest = await findPhotoRequestById(id);
 
     if (!photoRequest) {
@@ -93,7 +136,8 @@ export const getPhotoRequestById = async (
       return;
     }
 
-    if (photoRequest.userId.toString() !== req.user.userId) {
+    // Check ownership using helper
+    if (!userIdsMatch(photoRequest.userId, req.user.userId)) {
       sendForbidden(res, 'Access denied');
       return;
     }
@@ -125,7 +169,31 @@ export const createNewPhotoRequest = async (
     console.log('📸 Creating photo request:', {
       userId: req.user.userId,
       packageId: requestData.packageId,
+      requestType: requestData.requestType,
+      additionalPhotos: requestData.additionalPhotos,
     });
+
+    // Validate request data
+    if (!requestData.packageId) {
+      sendError(res, 'Package ID is required', 400);
+      return;
+    }
+
+    if (!requestData.requestType) {
+      sendError(res, 'Request type is required', 400);
+      return;
+    }
+
+    if (!['photos', 'information', 'both'].includes(requestData.requestType)) {
+      sendError(res, 'Invalid request type', 400);
+      return;
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(requestData.packageId)) {
+      sendError(res, 'Invalid package ID format', 400);
+      return;
+    }
 
     // Validate package exists and belongs to user
     const pkg = await findPackageById(requestData.packageId);
@@ -136,52 +204,64 @@ export const createNewPhotoRequest = async (
       return;
     }
 
-    const packageUserId = (pkg.userId as any)._id
-      ? (pkg.userId as any)._id.toString()
-      : pkg.userId.toString();
-
-    if (packageUserId !== req.user.userId.toString()) {
-      console.log('❌ Access denied - package ownership mismatch');
+    // Check package ownership using helper
+    console.log('📸 Checking package ownership...');
+    if (!userIdsMatch(pkg.userId, req.user.userId)) {
+      console.log('❌ Package ownership check failed');
       sendForbidden(res, 'This package does not belong to you');
       return;
     }
+    console.log('✅ Package ownership verified');
 
     // Check package status
     if (pkg.status !== 'received') {
       console.log('❌ Invalid package status:', pkg.status);
       sendError(
         res,
-        'Photo requests can only be made for packages in storage',
+        'Photo requests can only be made for packages in storage (status: received)',
         400
       );
       return;
     }
 
+    // Validate additionalPhotos
+    const additionalPhotos = Number(requestData.additionalPhotos) || 0;
+    if (
+      (requestData.requestType === 'photos' ||
+        requestData.requestType === 'both') &&
+      additionalPhotos < 1
+    ) {
+      sendError(res, 'At least 1 additional photo is required', 400);
+      return;
+    }
+
     // Calculate costs
     const costs = calculatePhotoRequestCost(
-      requestData.additionalPhotos,
+      additionalPhotos,
       requestData.requestType
     );
 
     console.log('💰 Calculated costs:', costs);
 
-    // Create photo request with status 'pending_payment'
+    // Create photo request with status 'pending'
+    // IMPORTANT: Store userId as ObjectId, not string
     const photoRequest = await createPhotoRequest({
-      userId: req.user.userId,
+      userId: new mongoose.Types.ObjectId(req.user.userId),
       packageId: requestData.packageId,
       requestType: requestData.requestType,
-      status: 'pending', // Will change to 'processing' after payment
-      additionalPhotos: requestData.additionalPhotos,
+      status: 'pending',
+      additionalPhotos: additionalPhotos,
       specificRequests: requestData.specificRequests || [],
       customInstructions: requestData.customInstructions || '',
       cost: costs,
     });
 
     console.log('✅ Photo request created:', photoRequest._id);
+    console.log('   - User ID stored:', photoRequest.userId);
 
     // Create transaction for payment (status: pending)
     const transaction = await Transaction.create({
-      userId: req.user.userId,
+      userId: new mongoose.Types.ObjectId(req.user.userId),
       type: 'photo_request',
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
@@ -191,26 +271,40 @@ export const createNewPhotoRequest = async (
         currency: 'MAD',
       },
       paymentMethod: 'card',
-      description: `Photo request for package - ${requestData.additionalPhotos} photos`,
+      description: `Photo request - ${additionalPhotos} photos`,
     });
 
     console.log('✅ Transaction created:', transaction._id);
 
+    // Return response with proper structure
     sendSuccess(
       res,
       {
-        photoRequest,
+        photoRequest: {
+          _id: photoRequest._id.toString(),
+          id: photoRequest._id.toString(),
+          userId: photoRequest.userId.toString(),
+          packageId: photoRequest.packageId,
+          requestType: photoRequest.requestType,
+          status: photoRequest.status,
+          additionalPhotos: photoRequest.additionalPhotos,
+          cost: photoRequest.cost,
+          createdAt: photoRequest.createdAt,
+        },
         transaction: {
-          id: transaction._id,
+          _id: transaction._id.toString(),
+          id: transaction._id.toString(),
           amount: costs.total,
           currency: 'MAD',
+          status: 'pending',
         },
       },
-      'Photo request created. Please confirm payment to proceed.',
+      'Photo request created successfully. Please confirm payment to proceed.',
       201
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error creating photo request:', error);
+    console.error('Error stack:', error.stack);
     next(error);
   }
 };
@@ -226,56 +320,92 @@ export const confirmPayment = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { id } = req.params;
     const { paymentMethod = 'card' } = req.body;
 
-    console.log('💳 Confirming payment for photo request:', id);
+    console.log('💳 ========================================');
+    console.log('💳 Confirming payment for photo request');
+    console.log('💳 Request ID:', id);
+    console.log('💳 User from token:', req.user.userId);
+    console.log('💳 ========================================');
 
-    const photoRequest = await findPhotoRequestById(id);
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log('❌ Invalid ObjectId format');
+      sendError(res, 'Invalid photo request ID', 400);
+      return;
+    }
+
+    // Find photo request WITHOUT population to avoid issues
+    const photoRequest = await PhotoRequest.findById(id);
 
     if (!photoRequest) {
+      console.log('❌ Photo request not found:', id);
       sendNotFound(res, 'Photo request not found');
       return;
     }
 
-    if (photoRequest.userId.toString() !== req.user.userId) {
-      sendForbidden(res, 'Access denied');
+    console.log('✅ Photo request found');
+    console.log('   - Photo request userId:', photoRequest.userId);
+    console.log('   - Photo request userId type:', typeof photoRequest.userId);
+    console.log('   - Token userId:', req.user.userId);
+    console.log('   - Token userId type:', typeof req.user.userId);
+
+    // Check ownership using helper
+    if (!userIdsMatch(photoRequest.userId, req.user.userId)) {
+      console.log('❌ Ownership check failed');
+      sendForbidden(res, 'Access denied to this photo request');
       return;
     }
 
+    console.log('✅ Ownership verified');
+
+    // Check status
     if (photoRequest.status !== 'pending') {
-      sendError(res, 'Photo request is not pending payment', 400);
+      console.log('❌ Invalid status:', photoRequest.status);
+      sendError(
+        res,
+        `Cannot confirm payment. Request status is: ${photoRequest.status}`,
+        400
+      );
       return;
     }
+
+    console.log('✅ Status is pending, proceeding with payment confirmation');
 
     // Find the transaction
     const transaction = await Transaction.findOne({
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
-      userId: req.user.userId,
+      userId: photoRequest.userId, // Use the same userId from photoRequest
     });
 
     if (!transaction) {
+      console.error('❌ Transaction not found for photo request:', id);
+      console.error('   Searched with userId:', photoRequest.userId);
       sendError(res, 'Transaction not found', 404);
       return;
     }
 
+    console.log('✅ Transaction found:', transaction._id);
+
     if (transaction.status === 'completed') {
+      console.log('❌ Payment already completed');
       sendError(res, 'Payment already completed', 400);
       return;
     }
 
-    // Update transaction status (in real app, this would happen after payment gateway confirmation)
+    // Update transaction status
     transaction.status = 'completed';
     transaction.paymentMethod = paymentMethod;
     transaction.completedAt = new Date();
     await transaction.save();
 
-    console.log('✅ Transaction completed:', transaction._id);
+    console.log('✅ Transaction updated to completed');
 
     // Update photo request status to 'processing'
     photoRequest.status = 'processing';
@@ -285,37 +415,42 @@ export const confirmPayment = async (
 
     // Create notification for user
     await createNotification({
-      userId: req.user.userId,
+      userId: photoRequest.userId,
       type: 'photo_request_complete',
       title: 'Payment Confirmed',
-      message: `Your photo request has been confirmed. We'll process it within 1 business day.`,
+      message: `Your photo request payment has been confirmed. We'll process it within 1 business day.`,
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
       priority: 'normal',
       actionUrl: `/profile`,
     });
 
-    // Create notification for admin (system notification)
-    await createNotification({
-      userId: req.user.userId, // In real app, this would be admin user ID
-      type: 'photo_request_complete',
-      title: 'New Photo Request',
-      message: `New photo request received and paid. Requires processing.`,
-      relatedId: photoRequest._id,
-      relatedModel: 'PhotoRequest',
-      priority: 'high',
-      actionUrl: `/admin/photo-requests/${photoRequest._id}`,
-    });
-
     console.log('✅ Notifications created');
+    console.log('💳 ========================================');
 
     sendSuccess(
       res,
-      { photoRequest, transaction },
+      {
+        photoRequest: {
+          _id: photoRequest._id.toString(),
+          id: photoRequest._id.toString(),
+          status: photoRequest.status,
+          cost: photoRequest.cost,
+        },
+        transaction: {
+          _id: transaction._id.toString(),
+          id: transaction._id.toString(),
+          status: transaction.status,
+          amount: transaction.amount,
+        },
+      },
       'Payment confirmed successfully. Your request is now being processed.'
     );
-  } catch (error) {
+  } catch (error: any) {
+    console.error('❌ ========================================');
     console.error('❌ Error confirming payment:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ ========================================');
     next(error);
   }
 };
@@ -331,7 +466,7 @@ export const updatePhotoRequest = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
@@ -339,6 +474,12 @@ export const updatePhotoRequest = async (
     const { status, photos, informationReport } = req.body;
 
     console.log('📸 Updating photo request:', id, 'Status:', status);
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      sendError(res, 'Invalid photo request ID', 400);
+      return;
+    }
 
     const photoRequest = await findPhotoRequestById(id);
 
@@ -391,7 +532,7 @@ export const updatePhotoRequest = async (
 };
 
 /**
- * Cancel photo request (before payment)
+ * Cancel photo request (before completion)
  * DELETE /api/photo-requests/:id
  */
 export const cancelPhotoRequest = async (
@@ -401,20 +542,27 @@ export const cancelPhotoRequest = async (
 ): Promise<void> => {
   try {
     if (!req.user) {
-      sendForbidden(res);
+      sendForbidden(res, 'Authentication required');
       return;
     }
 
     const { id } = req.params;
 
-    const photoRequest = await findPhotoRequestById(id);
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      sendError(res, 'Invalid photo request ID', 400);
+      return;
+    }
+
+    const photoRequest = await PhotoRequest.findById(id);
 
     if (!photoRequest) {
       sendNotFound(res, 'Photo request not found');
       return;
     }
 
-    if (photoRequest.userId.toString() !== req.user.userId) {
+    // Check ownership using helper
+    if (!userIdsMatch(photoRequest.userId, req.user.userId)) {
       sendForbidden(res, 'Access denied');
       return;
     }
