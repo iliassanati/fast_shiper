@@ -1,4 +1,4 @@
-// server/src/routes/admin/adminConsolidationRoutes.ts
+// server/src/routes/admin/adminConsolidationRoutes.ts - COMPLETE VERSION
 import { Router } from 'express';
 import * as adminConsolidationController from '../../controllers/admin/adminConsolidationController.js';
 import { authenticateAdmin } from '../../middleware/adminAuth.js';
@@ -9,21 +9,21 @@ const router = Router();
 router.use(authenticateAdmin);
 
 /**
- * @route   GET /api/admin/consolidations
- * @desc    Get all consolidations with filters
- * @access  Private (Admin)
- */
-router.get('/', adminConsolidationController.getAllConsolidations);
-
-/**
  * @route   GET /api/admin/consolidations/statistics
- * @desc    Get consolidation statistics
+ * @desc    Get consolidation statistics (MUST BE BEFORE /:id route)
  * @access  Private (Admin)
  */
 router.get(
   '/statistics',
   adminConsolidationController.getConsolidationStatistics
 );
+
+/**
+ * @route   GET /api/admin/consolidations
+ * @desc    Get all consolidations with filters
+ * @access  Private (Admin)
+ */
+router.get('/', adminConsolidationController.getAllConsolidations);
 
 /**
  * @route   GET /api/admin/consolidations/:id
@@ -61,5 +61,12 @@ router.post(
   '/:id/complete',
   adminConsolidationController.completeConsolidation
 );
+
+/**
+ * @route   DELETE /api/admin/consolidations/:id
+ * @desc    Cancel/Delete consolidation
+ * @access  Private (Admin)
+ */
+router.delete('/:id', adminConsolidationController.deleteConsolidation);
 
 export default router;
