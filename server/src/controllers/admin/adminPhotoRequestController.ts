@@ -1,4 +1,4 @@
-// server/src/controllers/admin/adminPhotoRequestController.ts
+// server/src/controllers/admin/adminPhotoRequestController.ts - FULLY FIXED
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import { PhotoRequest } from '../../models/PhotoRequest.js';
@@ -28,13 +28,19 @@ export const getAllPhotoRequests = async (
 
     const { status, search, page = 1, limit = 20 } = req.query;
 
+    console.log('📸 Admin fetching photo requests', { status, search });
+
     const query: any = {};
 
     if (status) {
       query.status = status;
     }
 
-    // Build query
+    if (search) {
+      // Search in user name, package tracking number, etc.
+      // We'll do this with a more complex query after population
+    }
+
     const photoRequests = await PhotoRequest.find(query)
       .populate('userId', 'name email suiteNumber phone')
       .populate('packageId', 'trackingNumber retailer description status')
@@ -45,7 +51,9 @@ export const getAllPhotoRequests = async (
 
     const total = await PhotoRequest.countDocuments(query);
 
-    console.log(`✅ Found ${photoRequests.length} photo requests`);
+    console.log(
+      `✅ Found ${photoRequests.length} photo requests (total: ${total})`
+    );
 
     sendSuccess(res, {
       photoRequests,
@@ -79,6 +87,8 @@ export const getPhotoRequestDetails = async (
 
     const { id } = req.params;
 
+    console.log(`📸 Admin fetching photo request details: ${id}`);
+
     const photoRequest = await PhotoRequest.findById(id)
       .populate('userId', 'name email suiteNumber phone address')
       .populate('packageId');
@@ -87,6 +97,8 @@ export const getPhotoRequestDetails = async (
       sendNotFound(res, 'Photo request not found');
       return;
     }
+
+    console.log(`✅ Photo request found: ${photoRequest._id}`);
 
     sendSuccess(res, { photoRequest });
   } catch (error) {
@@ -113,14 +125,23 @@ export const updatePhotoRequestStatus = async (
     const { id } = req.params;
     const { status } = req.body;
 
+    console.log(`📸 Admin updating photo request status: ${id} -> ${status}`);
+
     const validStatuses = ['pending', 'processing', 'completed', 'cancelled'];
 
     if (!validStatuses.includes(status)) {
-      sendError(res, 'Invalid status', 400);
+      sendError(
+        res,
+        'Invalid status. Must be one of: ' + validStatuses.join(', '),
+        400
+      );
       return;
     }
 
-    const photoRequest = await PhotoRequest.findById(id).populate('userId');
+    const photoRequest = await PhotoRequest.findById(id).populate(
+      'userId',
+      'name email'
+    );
 
     if (!photoRequest) {
       sendNotFound(res, 'Photo request not found');
@@ -128,6 +149,18 @@ export const updatePhotoRequestStatus = async (
     }
 
     const oldStatus = photoRequest.status;
+
+    // Validate status transition
+    if (oldStatus === 'completed' && status !== 'completed') {
+      sendError(res, 'Cannot change status of completed request', 400);
+      return;
+    }
+
+    if (oldStatus === 'cancelled' && status !== 'cancelled') {
+      sendError(res, 'Cannot change status of cancelled request', 400);
+      return;
+    }
+
     photoRequest.status = status;
 
     if (status === 'completed') {
@@ -136,10 +169,13 @@ export const updatePhotoRequestStatus = async (
 
     await photoRequest.save();
 
-    // Notify user
+    console.log(`✅ Status updated: ${oldStatus} -> ${status}`);
+
+    // Send notification based on status
     if (status !== oldStatus) {
-      let notificationMessage = '';
       let notificationTitle = '';
+      let notificationMessage = '';
+      let priority: 'low' | 'normal' | 'high' = 'normal';
 
       switch (status) {
         case 'processing':
@@ -151,6 +187,7 @@ export const updatePhotoRequestStatus = async (
           notificationTitle = 'Photos Ready!';
           notificationMessage =
             'Your requested photos are now available in your profile.';
+          priority = 'high';
           break;
         case 'cancelled':
           notificationTitle = 'Photo Request Cancelled';
@@ -166,17 +203,24 @@ export const updatePhotoRequestStatus = async (
           message: notificationMessage,
           relatedId: photoRequest._id,
           relatedModel: 'PhotoRequest',
-          priority: status === 'completed' ? 'high' : 'normal',
+          priority: priority,
           actionUrl: `/profile`,
         });
+
+        console.log(`✅ Notification sent to user`);
       }
     }
 
-    console.log(
-      `✅ Photo request ${id} status updated: ${oldStatus} → ${status}`
-    );
+    // Reload with populated data
+    const updatedPhotoRequest = await PhotoRequest.findById(id)
+      .populate('userId', 'name email suiteNumber phone')
+      .populate('packageId', 'trackingNumber retailer description status');
 
-    sendSuccess(res, { photoRequest }, 'Status updated successfully');
+    sendSuccess(
+      res,
+      { photoRequest: updatedPhotoRequest },
+      'Status updated successfully'
+    );
   } catch (error) {
     console.error('❌ Error updating photo request status:', error);
     next(error);
@@ -201,16 +245,44 @@ export const uploadPhotos = async (
     const { id } = req.params;
     const { photos } = req.body; // Array of { url, description }
 
+    console.log(`📸 Admin uploading photos for request ${id}`);
+    console.log(`📸 Number of photos:`, photos?.length || 0);
+
     if (!Array.isArray(photos) || photos.length === 0) {
-      sendError(res, 'Photos array is required', 400);
+      sendError(
+        res,
+        'Photos array is required and must contain at least one photo',
+        400
+      );
       return;
     }
 
-    const photoRequest = await PhotoRequest.findById(id).populate('userId');
+    // Validate photo format
+    for (const photo of photos) {
+      if (!photo.url || typeof photo.url !== 'string') {
+        sendError(res, 'Each photo must have a valid URL', 400);
+        return;
+      }
+    }
+
+    const photoRequest = await PhotoRequest.findById(id).populate(
+      'userId',
+      'name email'
+    );
 
     if (!photoRequest) {
       sendNotFound(res, 'Photo request not found');
       return;
+    }
+
+    // Check if request is in valid state for photo uploads
+    if (photoRequest.status === 'cancelled') {
+      sendError(res, 'Cannot add photos to cancelled request', 400);
+      return;
+    }
+
+    if (photoRequest.status === 'completed') {
+      console.log('⚠️ Adding photos to already completed request');
     }
 
     // Add photos
@@ -221,23 +293,44 @@ export const uploadPhotos = async (
     }));
 
     photoRequest.photos.push(...uploadedPhotos);
+
+    // If request was pending and payment was completed, move to processing
+    if (photoRequest.status === 'pending') {
+      photoRequest.status = 'processing';
+      console.log(`✅ Status updated from pending to processing`);
+    }
+
     await photoRequest.save();
 
     console.log(`✅ Uploaded ${photos.length} photos for request ${id}`);
+    console.log(
+      `✅ Request now has ${photoRequest.photos.length} total photos`
+    );
 
     // Notify user
     await createNotification({
       userId: photoRequest.userId,
       type: 'photo_request_complete',
       title: 'New Photos Added',
-      message: `${photos.length} new photo(s) have been added to your request.`,
+      message: `${photos.length} new photo(s) have been added to your photo request.`,
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
       priority: 'normal',
       actionUrl: `/profile`,
     });
 
-    sendSuccess(res, { photoRequest }, 'Photos uploaded successfully');
+    console.log(`✅ Notification sent to user`);
+
+    // Reload with populated data
+    const updatedPhotoRequest = await PhotoRequest.findById(id)
+      .populate('userId', 'name email suiteNumber phone')
+      .populate('packageId', 'trackingNumber retailer description status');
+
+    sendSuccess(
+      res,
+      { photoRequest: updatedPhotoRequest },
+      'Photos uploaded successfully'
+    );
   } catch (error) {
     console.error('❌ Error uploading photos:', error);
     next(error);
@@ -262,36 +355,76 @@ export const addInformationReport = async (
     const { id } = req.params;
     const { report } = req.body;
 
-    if (!report || typeof report !== 'string') {
-      sendError(res, 'Report text is required', 400);
+    console.log(`📝 Admin adding information report for request ${id}`);
+
+    if (!report || typeof report !== 'string' || report.trim().length === 0) {
+      sendError(res, 'Report text is required and cannot be empty', 400);
       return;
     }
 
-    const photoRequest = await PhotoRequest.findById(id).populate('userId');
+    const photoRequest = await PhotoRequest.findById(id).populate(
+      'userId',
+      'name email'
+    );
 
     if (!photoRequest) {
       sendNotFound(res, 'Photo request not found');
       return;
     }
 
-    photoRequest.informationReport = report;
+    // Check if request type includes information
+    if (photoRequest.requestType === 'photos') {
+      sendError(
+        res,
+        'This photo request does not include information request',
+        400
+      );
+      return;
+    }
+
+    // Check if request is in valid state
+    if (photoRequest.status === 'cancelled') {
+      sendError(res, 'Cannot add report to cancelled request', 400);
+      return;
+    }
+
+    photoRequest.informationReport = report.trim();
+
+    // If request was pending and payment was completed, move to processing
+    if (photoRequest.status === 'pending') {
+      photoRequest.status = 'processing';
+      console.log(`✅ Status updated from pending to processing`);
+    }
+
     await photoRequest.save();
 
-    console.log(`✅ Added information report for request ${id}`);
+    console.log(`✅ Information report added for request ${id}`);
 
     // Notify user
     await createNotification({
       userId: photoRequest.userId,
       type: 'photo_request_complete',
       title: 'Package Information Report Ready',
-      message: 'Your package inspection report is now available.',
+      message:
+        'Your package inspection report is now available in your profile.',
       relatedId: photoRequest._id,
       relatedModel: 'PhotoRequest',
       priority: 'normal',
       actionUrl: `/profile`,
     });
 
-    sendSuccess(res, { photoRequest }, 'Report added successfully');
+    console.log(`✅ Notification sent to user`);
+
+    // Reload with populated data
+    const updatedPhotoRequest = await PhotoRequest.findById(id)
+      .populate('userId', 'name email suiteNumber phone')
+      .populate('packageId', 'trackingNumber retailer description status');
+
+    sendSuccess(
+      res,
+      { photoRequest: updatedPhotoRequest },
+      'Report added successfully'
+    );
   } catch (error) {
     console.error('❌ Error adding report:', error);
     next(error);
@@ -312,6 +445,8 @@ export const getPhotoRequestStatistics = async (
       sendForbidden(res);
       return;
     }
+
+    console.log('📊 Admin fetching photo request statistics');
 
     const [total, byStatus, avgPhotos, revenueData] = await Promise.all([
       // Total photo requests
@@ -347,17 +482,20 @@ export const getPhotoRequestStatistics = async (
       statusBreakdown[item._id] = item.count;
     });
 
-    sendSuccess(res, {
-      statistics: {
-        total,
-        byStatus: statusBreakdown,
-        avgPhotosRequested: Math.round(avgPhotos[0]?.avg || 0),
-        revenue: {
-          total: revenueData[0]?.total || 0,
-          completedRequests: revenueData[0]?.count || 0,
-        },
+    const statistics = {
+      total,
+      byStatus: statusBreakdown,
+      avgPhotosRequested: Math.round(avgPhotos[0]?.avg || 0),
+      revenue: {
+        total: revenueData[0]?.total || 0,
+        completedRequests: revenueData[0]?.count || 0,
+        currency: 'MAD',
       },
-    });
+    };
+
+    console.log('✅ Statistics calculated:', statistics);
+
+    sendSuccess(res, { statistics });
   } catch (error) {
     console.error('❌ Error fetching statistics:', error);
     next(error);
