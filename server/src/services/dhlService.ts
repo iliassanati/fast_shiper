@@ -2,27 +2,40 @@
 import axios from 'axios';
 import type { IShipment } from '../types/index.js';
 
+interface DHLCredentials {
+  apiKey: string;
+  apiSecret: string;
+  accountNumber: string;
+  baseUrl: string;
+}
+
+interface DHLAddress {
+  name: string;
+  company?: string;
+  street: string;
+  city: string;
+  postalCode: string;
+  countryCode: string;
+  phone: string;
+  email?: string;
+}
+
+interface DHLPackage {
+  weight: number; // kg
+  length: number; // cm
+  width: number;
+  height: number;
+}
+
 interface DHLShipmentRequest {
   shipment: IShipment;
   includeLabel?: boolean;
 }
 
-interface DHLShipmentResponse {
-  shipmentTrackingNumber: string;
-  trackingUrl: string;
-  labelUrl?: string;
-  dispatchConfirmationNumber: string;
-  packages: Array<{
-    referenceNumber: number;
-    trackingNumber: string;
-    trackingUrl: string;
-  }>;
-}
-
 interface DHLRateRequest {
-  weight: number; // in kg
+  weight: number;
   dimensions: {
-    length: number; // in cm
+    length: number;
     width: number;
     height: number;
   };
@@ -30,70 +43,143 @@ interface DHLRateRequest {
   destinationCountryCode: string;
 }
 
-interface DHLRate {
-  serviceCode: string;
-  serviceName: string;
-  totalPrice: {
-    price: number;
-    currency: string;
-  };
-  deliveryTime: string;
-}
-
 class DHLService {
-  private apiUrl: string;
-  private apiKey: string;
-  private apiSecret: string;
-  private accountNumber: string;
-  private shipperInfo: {
-    name: string;
-    company: string;
-    street: string;
-    city: string;
-    postalCode: string;
-    country: string;
-    phone: string;
-    email: string;
-  };
+  private credentials: DHLCredentials;
+  private configured: boolean = false;
 
   constructor() {
-    this.apiUrl =
-      process.env.DHL_API_URL || 'https://api-sandbox.dhl.com/mydhlapi';
-    this.apiKey = process.env.DHL_API_KEY || '';
-    this.apiSecret = process.env.DHL_API_SECRET || '';
-    this.accountNumber = process.env.DHL_ACCOUNT_NUMBER || '';
+    this.credentials = {
+      apiKey: process.env.DHL_API_KEY || '',
+      apiSecret: process.env.DHL_API_SECRET || '',
+      accountNumber: process.env.DHL_ACCOUNT_NUMBER || '',
+      baseUrl:
+        process.env.DHL_API_URL || 'https://express.api.dhl.com/mydhlapi/test',
+    };
 
-    this.shipperInfo = {
-      name: process.env.DHL_SHIPPER_NAME || 'Fast Shipper Warehouse',
-      company: process.env.DHL_SHIPPER_COMPANY || 'Fast Shipper LLC',
-      street: process.env.DHL_SHIPPER_STREET || '123 Warehouse Street',
-      city: process.env.DHL_SHIPPER_CITY || 'New York',
-      postalCode: process.env.DHL_SHIPPER_POSTAL_CODE || '10001',
-      country: process.env.DHL_SHIPPER_COUNTRY || 'US',
-      phone: process.env.DHL_SHIPPER_PHONE || '+1-555-0100',
-      email: process.env.DHL_SHIPPER_EMAIL || 'warehouse@fastshipper.com',
+    this.configured = !!(
+      this.credentials.apiKey &&
+      this.credentials.apiSecret &&
+      this.credentials.accountNumber
+    );
+
+    if (this.configured) {
+      console.log('✅ DHL Service configured successfully');
+    } else {
+      console.warn('⚠️ DHL Service not configured - missing credentials');
+    }
+  }
+
+  public isConfigured(): boolean {
+    return this.configured;
+  }
+
+  /**
+   * Get authentication headers for DHL API
+   */
+  private getAuthHeaders() {
+    const auth = Buffer.from(
+      `${this.credentials.apiKey}:${this.credentials.apiSecret}`
+    ).toString('base64');
+
+    return {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/json',
     };
   }
 
   /**
-   * Get Base64 encoded credentials for DHL API
+   * Get shipping rates from DHL
    */
-  private getAuthHeader(): string {
-    const credentials = `${this.apiKey}:${this.apiSecret}`;
-    return Buffer.from(credentials).toString('base64');
+  async getRates(request: DHLRateRequest) {
+    if (!this.configured) {
+      throw new Error('DHL service is not configured');
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.credentials.baseUrl}/rates`,
+        {
+          customerDetails: {
+            shipperDetails: {
+              postalCode: '10001',
+              cityName: 'New York',
+              countryCode: request.originCountryCode,
+            },
+            receiverDetails: {
+              postalCode: '20000',
+              cityName: 'Casablanca',
+              countryCode: request.destinationCountryCode,
+            },
+          },
+          accounts: [
+            {
+              typeCode: 'shipper',
+              number: this.credentials.accountNumber,
+            },
+          ],
+          productCode: 'P', // Express Worldwide
+          localProductCode: 'P',
+          valueAddedServices: [
+            {
+              serviceCode: 'II', // Insurance
+            },
+          ],
+          payerCountryCode: request.originCountryCode,
+          plannedShippingDateAndTime: new Date().toISOString(),
+          unitOfMeasurement: 'metric',
+          isCustomsDeclarable: true,
+          monetaryAmount: [
+            {
+              typeCode: 'declaredValue',
+              value: 100,
+              currency: 'USD',
+            },
+          ],
+          packages: [
+            {
+              weight: request.weight,
+              dimensions: {
+                length: request.dimensions.length,
+                width: request.dimensions.width,
+                height: request.dimensions.height,
+              },
+            },
+          ],
+        },
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+
+      return response.data.products.map((product: any) => ({
+        productCode: product.productCode,
+        productName: product.productName,
+        totalPrice: product.totalPrice[0].price,
+        currency: product.totalPrice[0].priceCurrency,
+        deliveryTime: product.deliveryCapabilities?.totalTransitDays,
+        serviceLevel: this.getServiceLevel(product.productCode),
+      }));
+    } catch (error: any) {
+      console.error('DHL Rates Error:', error.response?.data || error.message);
+      throw new Error(
+        error.response?.data?.message || 'Failed to get DHL rates'
+      );
+    }
   }
 
   /**
-   * Create a shipping label with DHL
+   * Create DHL shipment and generate label
    */
-  async createShipment(
-    request: DHLShipmentRequest
-  ): Promise<DHLShipmentResponse> {
-    try {
-      const { shipment, includeLabel = true } = request;
+  async createShipment(request: DHLShipmentRequest) {
+    if (!this.configured) {
+      throw new Error('DHL service is not configured');
+    }
 
-      // Prepare DHL API request
-      const dhlRequest = {
+    const { shipment } = request;
+
+    try {
+      // Prepare shipment data for DHL API
+      const dhlShipmentData = {
         plannedShippingDateAndTime: new Date().toISOString(),
         pickup: {
           isRequested: false,
@@ -106,37 +192,36 @@ class DHLService {
           shipment.carrier,
           shipment.serviceLevel
         ),
-        getRateEstimates: false,
         accounts: [
           {
             typeCode: 'shipper',
-            number: this.accountNumber,
+            number: this.credentials.accountNumber,
           },
         ],
         customerDetails: {
           shipperDetails: {
             postalAddress: {
-              postalCode: this.shipperInfo.postalCode,
-              cityName: this.shipperInfo.city,
-              countryCode: this.shipperInfo.country,
-              addressLine1: this.shipperInfo.street,
+              postalCode: '10001',
+              cityName: 'New York',
+              countryCode: 'US',
+              addressLine1: '123 Warehouse St',
             },
             contactInformation: {
-              email: this.shipperInfo.email,
-              phone: this.shipperInfo.phone,
-              companyName: this.shipperInfo.company,
-              fullName: this.shipperInfo.name,
+              email: 'warehouse@fastshipper.com',
+              phone: '+1234567890',
+              companyName: 'Fast Shipper Inc',
+              fullName: 'Fast Shipper Warehouse',
             },
           },
           receiverDetails: {
             postalAddress: {
               postalCode: shipment.destination.postalCode,
               cityName: shipment.destination.city,
-              countryCode: 'MA', // Morocco
+              countryCode: 'MA',
               addressLine1: shipment.destination.street,
             },
             contactInformation: {
-              email: 'customer@example.com', // Get from user
+              email: 'customer@example.com',
               phone: shipment.destination.phone,
               companyName: '',
               fullName: shipment.destination.fullName,
@@ -152,10 +237,16 @@ class DHLService {
                 width: shipment.dimensions.width,
                 height: shipment.dimensions.height,
               },
+              customerReferences: [
+                {
+                  value: shipment._id.toString(),
+                  typeCode: 'CU',
+                },
+              ],
             },
           ],
           isCustomsDeclarable: true,
-          declaredValue: this.calculateTotalValue(shipment.customsInfo),
+          declaredValue: shipment.insurance?.coverage || 100,
           declaredValueCurrency: 'USD',
           exportDeclaration: {
             lineItems: shipment.customsInfo.map((item, index) => ({
@@ -169,7 +260,7 @@ class DHLService {
               commodityCodes: [
                 {
                   typeCode: 'outbound',
-                  value: item.hsCode || '999999',
+                  value: item.hsCode || '9999.99.99',
                 },
               ],
               exportReasonType: 'permanent',
@@ -180,71 +271,56 @@ class DHLService {
               },
             })),
             invoice: {
-              number: `INV-${Date.now()}`,
+              number: `INV-${shipment._id}`,
               date: new Date().toISOString().split('T')[0],
             },
           },
-          description: 'Personal effects',
+          description: 'Personal Items',
           incoterm: 'DAP',
         },
-        outputImageProperties: includeLabel
-          ? {
-              printerDPI: 300,
-              encodingFormat: 'pdf',
-              imageOptions: [
-                {
-                  typeCode: 'label',
-                  templateName: 'ECOM26_A6_001',
-                  isRequested: true,
-                },
-                {
-                  typeCode: 'waybillDoc',
-                  templateName: 'ARCH_8X4',
-                  isRequested: true,
-                },
-              ],
-            }
-          : undefined,
+        outputImageProperties: {
+          imageOptions: [
+            {
+              typeCode: 'label',
+              templateName: 'ECOM26_84_001',
+              isRequested: request.includeLabel !== false,
+            },
+            {
+              typeCode: 'waybillDoc',
+              templateName: 'ARCH_8X4',
+              isRequested: true,
+            },
+          ],
+        },
       };
 
-      // Make API call to DHL
       const response = await axios.post(
-        `${this.apiUrl}/shipments`,
-        dhlRequest,
+        `${this.credentials.baseUrl}/shipments`,
+        dhlShipmentData,
         {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${this.getAuthHeader()}`,
-          },
+          headers: this.getAuthHeaders(),
         }
       );
 
-      // Extract response data
-      const data = response.data;
-      const shipmentResponse: DHLShipmentResponse = {
-        shipmentTrackingNumber: data.shipmentTrackingNumber,
-        trackingUrl: `https://www.dhl.com/en/express/tracking.html?AWB=${data.shipmentTrackingNumber}&brand=DHL`,
-        dispatchConfirmationNumber: data.dispatchConfirmationNumber,
-        packages: data.packages.map((pkg: any) => ({
-          referenceNumber: pkg.referenceNumber,
-          trackingNumber: pkg.trackingNumber,
-          trackingUrl: `https://www.dhl.com/en/express/tracking.html?AWB=${pkg.trackingNumber}&brand=DHL`,
-        })),
-      };
+      const shipmentData = response.data.packages[0];
 
-      // Add label URL if available
-      if (data.documents && data.documents.length > 0) {
-        const labelDoc = data.documents.find(
+      return {
+        shipmentTrackingNumber: response.data.shipmentTrackingNumber,
+        trackingUrl: `https://www.dhl.com/en/express/tracking.html?AWB=${response.data.shipmentTrackingNumber}`,
+        labelUrl: shipmentData.documents?.find(
           (doc: any) => doc.typeCode === 'label'
-        );
-        if (labelDoc) {
-          shipmentResponse.labelUrl = labelDoc.content; // Base64 PDF
-        }
-      }
-
-      return shipmentResponse;
+        )?.content,
+        waybillUrl: shipmentData.documents?.find(
+          (doc: any) => doc.typeCode === 'waybillDoc'
+        )?.content,
+        estimatedDelivery:
+          response.data.estimatedDeliveryDate?.deliveryDateTime,
+      };
     } catch (error: any) {
-      console.error('DHL API Error:', error.response?.data || error.message);
+      console.error(
+        'DHL Shipment Creation Error:',
+        error.response?.data || error.message
+      );
       throw new Error(
         error.response?.data?.message || 'Failed to create DHL shipment'
       );
@@ -252,137 +328,93 @@ class DHLService {
   }
 
   /**
-   * Get shipping rates from DHL
+   * Track shipment
    */
-  async getRates(request: DHLRateRequest): Promise<DHLRate[]> {
-    try {
-      const ratesRequest = {
-        customerDetails: {
-          shipperDetails: {
-            postalCode: this.shipperInfo.postalCode,
-            cityName: this.shipperInfo.city,
-            countryCode: this.shipperInfo.country,
-          },
-          receiverDetails: {
-            postalCode: '20000',
-            cityName: 'Casablanca',
-            countryCode: request.destinationCountryCode,
-          },
-        },
-        accounts: [
-          {
-            typeCode: 'shipper',
-            number: this.accountNumber,
-          },
-        ],
-        plannedShippingDateAndTime: new Date().toISOString(),
-        unitOfMeasurement: 'metric',
-        isCustomsDeclarable: true,
-        monetaryAmount: [
-          {
-            typeCode: 'declaredValue',
-            value: 100,
-            currency: 'USD',
-          },
-        ],
-        requestAllValueAddedServices: false,
-        packages: [
-          {
-            weight: request.weight,
-            dimensions: {
-              length: request.dimensions.length,
-              width: request.dimensions.width,
-              height: request.dimensions.height,
-            },
-          },
-        ],
-      };
-
-      const response = await axios.post(`${this.apiUrl}/rates`, ratesRequest, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${this.getAuthHeader()}`,
-        },
-      });
-
-      const products = response.data.products || [];
-      return products.map((product: any) => ({
-        serviceCode: product.productCode,
-        serviceName: product.productName,
-        totalPrice: {
-          price: product.totalPrice[0]?.price || 0,
-          currency: product.totalPrice[0]?.currency || 'USD',
-        },
-        deliveryTime: product.deliveryCapabilities?.deliveryTypeCode || 'QDDC',
-      }));
-    } catch (error: any) {
-      console.error(
-        'DHL Rates API Error:',
-        error.response?.data || error.message
-      );
-      throw new Error(
-        error.response?.data?.message || 'Failed to get DHL rates'
-      );
+  async trackShipment(trackingNumber: string) {
+    if (!this.configured) {
+      throw new Error('DHL service is not configured');
     }
-  }
 
-  /**
-   * Track a shipment
-   */
-  async trackShipment(trackingNumber: string): Promise<any> {
     try {
       const response = await axios.get(
-        `${this.apiUrl}/shipments/${trackingNumber}/tracking`,
+        `${this.credentials.baseUrl}/track/shipments`,
         {
-          headers: {
-            Authorization: `Basic ${this.getAuthHeader()}`,
+          params: {
+            trackingNumber,
           },
+          headers: this.getAuthHeaders(),
         }
       );
 
-      return response.data;
+      const shipment = response.data.shipments[0];
+
+      return {
+        trackingNumber: shipment.id,
+        status: this.mapDHLStatus(shipment.status.statusCode),
+        events: shipment.events.map((event: any) => ({
+          status: this.mapDHLStatus(event.statusCode),
+          location: `${event.location?.address?.addressLocality || ''}, ${
+            event.location?.address?.countryCode || ''
+          }`,
+          description: event.description,
+          timestamp: new Date(event.timestamp),
+        })),
+        estimatedDelivery: shipment.estimatedDeliveryDate,
+      };
     } catch (error: any) {
       console.error(
-        'DHL Tracking API Error:',
+        'DHL Tracking Error:',
         error.response?.data || error.message
       );
       throw new Error(
-        error.response?.data?.message || 'Failed to track shipment'
+        error.response?.data?.message || 'Failed to track DHL shipment'
       );
     }
   }
 
   /**
-   * Get DHL product code based on carrier and service level
+   * Map service level to DHL product code
    */
   private getProductCode(carrier: string, serviceLevel: string): string {
-    // DHL Express product codes
-    const productCodes: Record<string, string> = {
-      'express-worldwide': 'P',
-      'express-12:00': 'T',
-      'express-9:00': 'Y',
-      'economy-select': 'W',
-      'domestic-express': 'N',
+    const mapping: Record<string, string> = {
+      express: 'P', // Express Worldwide
+      standard: 'Y', // Economy Select
+      priority: 'D', // Express 12:00
     };
 
-    return productCodes[serviceLevel.toLowerCase()] || 'P'; // Default to Worldwide Express
+    return mapping[serviceLevel.toLowerCase()] || 'P';
   }
 
   /**
-   * Calculate total declared value
+   * Map product code to service level name
    */
-  private calculateTotalValue(customsInfo: IShipment['customsInfo']): number {
-    return customsInfo.reduce(
-      (total, item) => total + item.value * item.quantity,
-      0
-    );
+  private getServiceLevel(productCode: string): string {
+    const mapping: Record<string, string> = {
+      P: 'Express Worldwide',
+      Y: 'Economy Select',
+      D: 'Express 12:00',
+      T: 'Express 9:00',
+      N: 'Domestic Express',
+    };
+
+    return mapping[productCode] || 'Express';
   }
 
   /**
-   * Validate DHL configuration
+   * Map DHL status to our internal status
    */
-  isConfigured(): boolean {
-    return !!(this.apiKey && this.apiSecret && this.accountNumber);
+  private mapDHLStatus(dhlStatus: string): string {
+    const mapping: Record<string, string> = {
+      PU: 'pending', // Shipment information received
+      PL: 'processing', // Picked up
+      RCS: 'in_transit', // Received at DHL facility
+      WC: 'in_transit', // With delivery courier
+      OK: 'delivered', // Delivered
+      DF: 'delivered', // Delivered to final destination
+      DD: 'delivered', // Delivered, signed for
+    };
+
+    return mapping[dhlStatus] || 'in_transit';
   }
 }
 

@@ -1,20 +1,20 @@
-// server/src/controllers/admin/adminAuthController.ts
-import type { Request, Response, NextFunction } from 'express';
+// server/src/controllers/admin/adminAuthController.ts - ADD THIS
+import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
-import {
-  findAdminByEmail,
-  findAdminById,
-  updateAdminLastLogin,
-} from '../../models/Admin.js';
+import { findAdminByEmail, updateAdminLastLogin } from '../../models/Admin.js';
 import { generateToken } from '../../utils/jwt.js';
-import { sendSuccess, sendUnauthorized } from '../../utils/responses.js';
+import {
+  sendSuccess,
+  sendError,
+  sendUnauthorized,
+} from '../../utils/responses.js';
 
 /**
  * Admin login
  * POST /api/admin/auth/login
  */
 export const adminLogin = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -25,15 +25,15 @@ export const adminLogin = async (
     const admin = await findAdminByEmail(email);
 
     if (!admin) {
-      sendUnauthorized(res, 'Invalid credentials');
+      sendUnauthorized(res, 'Invalid email or password');
       return;
     }
 
-    // Check password
+    // Verify password
     const isPasswordValid = await admin.comparePassword(password);
 
     if (!isPasswordValid) {
-      sendUnauthorized(res, 'Invalid credentials');
+      sendUnauthorized(res, 'Invalid email or password');
       return;
     }
 
@@ -46,7 +46,7 @@ export const adminLogin = async (
       email: admin.email,
     });
 
-    // Send response
+    // Return success response
     sendSuccess(
       res,
       {
@@ -54,7 +54,7 @@ export const adminLogin = async (
           id: admin._id,
           name: admin.name,
           email: admin.email,
-          lastLogin: admin.lastLogin,
+          lastLogin: new Date(),
         },
         token,
       },
@@ -66,7 +66,7 @@ export const adminLogin = async (
 };
 
 /**
- * Get current admin profile
+ * Get admin profile
  * GET /api/admin/auth/me
  */
 export const getAdminProfile = async (
@@ -80,6 +80,7 @@ export const getAdminProfile = async (
       return;
     }
 
+    const { findAdminById } = await import('../../models/Admin.js');
     const admin = await findAdminById(req.user.userId);
 
     if (!admin) {
@@ -104,6 +105,14 @@ export const getAdminProfile = async (
  * Admin logout
  * POST /api/admin/auth/logout
  */
-export const adminLogout = (req: Request, res: Response): void => {
-  sendSuccess(res, null, 'Logout successful');
+export const adminLogout = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    sendSuccess(res, null, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
 };
