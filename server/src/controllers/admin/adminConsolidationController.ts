@@ -1,4 +1,4 @@
-// server/src/controllers/admin/adminConsolidationController.ts - FIXED VERSION
+// server/src/controllers/admin/adminConsolidationController.ts - NO TRANSACTIONS VERSION
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import {
@@ -31,16 +31,10 @@ export const getAllConsolidations = async (
     }
 
     const { status, userId, page = 1, limit = 20 } = req.query;
-
     const query: any = {};
 
-    if (status) {
-      query.status = status;
-    }
-
-    if (userId) {
-      query.userId = userId;
-    }
+    if (status) query.status = status;
+    if (userId) query.userId = userId;
 
     console.log('📦 Fetching consolidations with query:', query);
 
@@ -49,6 +43,10 @@ export const getAllConsolidations = async (
       .populate({
         path: 'packageIds',
         select: 'trackingNumber retailer description status weight dimensions',
+      })
+      .populate({
+        path: 'resultingPackageId',
+        select: 'trackingNumber status weight dimensions',
       })
       .sort({ createdAt: -1 })
       .limit(Number(limit))
@@ -139,7 +137,6 @@ export const updateConsolidationStatusById = async (
 
     console.log(`🔄 Updating consolidation ${id} status to: ${status}`);
 
-    // Validate status
     const validStatuses = ['pending', 'processing', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       sendError(res, 'Invalid status value', 400);
@@ -156,7 +153,6 @@ export const updateConsolidationStatusById = async (
       return;
     }
 
-    // Update status
     consolidation.status = status;
 
     if (status === 'completed') {
@@ -167,7 +163,6 @@ export const updateConsolidationStatusById = async (
 
     console.log(`✅ Status updated successfully`);
 
-    // Create notification based on status
     let notificationTitle = '';
     let notificationMessage = '';
 
@@ -185,7 +180,6 @@ export const updateConsolidationStatusById = async (
       case 'cancelled':
         notificationTitle = 'Consolidation Cancelled';
         notificationMessage = 'Your consolidation request has been cancelled.';
-        // Revert package statuses back to received
         await Package.updateMany(
           { _id: { $in: consolidation.packageIds } },
           { $set: { status: 'received', consolidationId: null } }
@@ -207,10 +201,10 @@ export const updateConsolidationStatusById = async (
       console.log('✅ Notification sent to user');
     }
 
-    // Reload with populated fields
     const updated = await Consolidation.findById(id)
       .populate('userId', 'name email suiteNumber')
-      .populate('packageIds');
+      .populate('packageIds')
+      .populate('resultingPackageId');
 
     sendSuccess(res, { consolidation: updated }, 'Status updated successfully');
   } catch (error) {
@@ -235,7 +229,7 @@ export const uploadConsolidationPhotos = async (
     }
 
     const { id } = req.params;
-    const { photos } = req.body; // Array of { url, type }
+    const { photos } = req.body;
 
     console.log(
       `📸 Uploading ${photos?.length || 0} photos for consolidation ${id}`
@@ -253,7 +247,6 @@ export const uploadConsolidationPhotos = async (
       return;
     }
 
-    // Add photos
     photos.forEach((photo: { url: string; type: string }) => {
       consolidation.photos.push({
         url: photo.url,
@@ -266,7 +259,6 @@ export const uploadConsolidationPhotos = async (
 
     console.log('✅ Photos uploaded successfully');
 
-    // Notify user
     await createNotification({
       userId: consolidation.userId,
       type: 'consolidation_complete',
@@ -280,7 +272,8 @@ export const uploadConsolidationPhotos = async (
 
     const updated = await Consolidation.findById(id)
       .populate('userId', 'name email suiteNumber')
-      .populate('packageIds');
+      .populate('packageIds')
+      .populate('resultingPackageId');
 
     sendSuccess(
       res,
@@ -296,6 +289,7 @@ export const uploadConsolidationPhotos = async (
 /**
  * Complete consolidation and create resulting package
  * POST /api/admin/consolidations/:id/complete
+ * 🔥 FIXED: No transactions (works with standalone MongoDB)
  */
 export const completeConsolidation = async (
   req: AuthRequest,
@@ -312,10 +306,21 @@ export const completeConsolidation = async (
     const { weight, dimensions, notes, photos } = req.body;
 
     console.log(`✅ Completing consolidation ${id}`);
+    console.log('📦 Request data:', { weight, dimensions, notes });
 
     // Validate required fields
-    if (!weight || !dimensions) {
-      sendError(res, 'Weight and dimensions are required', 400);
+    if (
+      !weight ||
+      !dimensions ||
+      !dimensions.length ||
+      !dimensions.width ||
+      !dimensions.height
+    ) {
+      sendError(
+        res,
+        'Weight and complete dimensions (length, width, height) are required',
+        400
+      );
       return;
     }
 
@@ -334,19 +339,61 @@ export const completeConsolidation = async (
       return;
     }
 
-    // Update consolidation with final measurements
-    consolidation.afterConsolidation = {
-      weight,
-      dimensions,
-    };
+    // Fetch original packages
+    const originalPackages = await Package.find({
+      _id: { $in: consolidation.packageIds },
+    });
+
+    console.log(`📦 Found ${originalPackages.length} original packages`);
+
+    const packageDescriptions = originalPackages
+      .map((pkg) => `${pkg.description} (${pkg.retailer})`)
+      .join(', ');
+
+    // Create consolidated package
+    const consolidatedPackage = new Package({
+      userId: consolidation.userId._id,
+      trackingNumber: `CONS-${Date.now()}`,
+      retailer: 'Consolidated',
+      description: `Consolidated package: ${packageDescriptions}`,
+      status: 'received',
+      receivedDate: new Date(),
+      weight: { value: weight, unit: 'kg' },
+      dimensions: {
+        length: dimensions.length,
+        width: dimensions.width,
+        height: dimensions.height,
+        unit: 'cm',
+      },
+      storageDay: 0,
+      estimatedValue: {
+        amount: originalPackages.reduce(
+          (sum, pkg) => sum + (pkg.estimatedValue?.amount || 0),
+          0
+        ),
+        currency: 'USD',
+      },
+      photos: consolidation.photos.filter((p) => p.type === 'after'),
+      consolidationId: consolidation._id,
+      isConsolidatedResult: true,
+      originalPackageIds: consolidation.packageIds as any,
+      notes:
+        notes ||
+        `Consolidated from ${consolidation.packageIds.length} packages`,
+    });
+
+    await consolidatedPackage.save();
+    console.log(
+      `✅ Created resulting package: ${consolidatedPackage.trackingNumber}`
+    );
+
+    // Update consolidation
+    consolidation.afterConsolidation = { weight, dimensions };
     consolidation.status = 'completed';
     consolidation.actualCompletion = new Date();
+    consolidation.resultingPackageId = consolidatedPackage._id as any;
+    if (notes) consolidation.notes = notes;
 
-    if (notes) {
-      consolidation.notes = notes;
-    }
-
-    // Add photos if provided
     if (photos && Array.isArray(photos)) {
       photos.forEach((photo: { url: string; type: string }) => {
         consolidation.photos.push({
@@ -358,55 +405,13 @@ export const completeConsolidation = async (
     }
 
     await consolidation.save();
-
     console.log('✅ Consolidation data updated');
 
-    // Create a new consolidated package
-    const consolidatedPackage = new Package({
-      userId: consolidation.userId._id,
-      trackingNumber: `CONS-${Date.now()}`,
-      retailer: 'Consolidated',
-      description: `Consolidated package (${consolidation.packageIds.length} items)`,
-      status: 'received',
-      receivedDate: new Date(),
-      weight: {
-        value: weight,
-        unit: 'kg',
-      },
-      dimensions: {
-        length: dimensions.length,
-        width: dimensions.width,
-        height: dimensions.height,
-        unit: 'cm',
-      },
-      storageDay: 0,
-      estimatedValue: {
-        amount: 0, // Can be calculated from original packages if needed
-        currency: 'USD',
-      },
-      photos: consolidation.photos.filter((p) => p.type === 'after'),
-      consolidationId: consolidation._id,
-      notes:
-        notes ||
-        `Consolidated from ${consolidation.packageIds.length} packages`,
-    });
-
-    await consolidatedPackage.save();
-
-    console.log(
-      `✅ Created resulting package: ${consolidatedPackage.trackingNumber}`
-    );
-
-    // Link the resulting package
-    consolidation.resultingPackageId = consolidatedPackage._id as any;
-    await consolidation.save();
-
-    // Update original packages status to consolidated
+    // Update original packages
     await Package.updateMany(
       { _id: { $in: consolidation.packageIds } },
       { $set: { status: 'consolidated', consolidationId: consolidation._id } }
     );
-
     console.log('✅ Updated original package statuses');
 
     // Notify user
@@ -420,10 +425,9 @@ export const completeConsolidation = async (
       priority: 'high',
       actionUrl: `/packages/${consolidatedPackage._id}`,
     });
-
     console.log('✅ Notification sent');
 
-    // Reload with all populated fields
+    // Reload with populated fields
     const completed = await Consolidation.findById(id)
       .populate('userId', 'name email suiteNumber')
       .populate('packageIds')
@@ -431,15 +435,17 @@ export const completeConsolidation = async (
 
     sendSuccess(
       res,
-      {
-        consolidation: completed,
-        resultingPackage: consolidatedPackage,
-      },
+      { consolidation: completed, resultingPackage: consolidatedPackage },
       'Consolidation completed successfully'
     );
   } catch (error) {
     console.error('❌ Error completing consolidation:', error);
-    next(error);
+    console.error('Stack trace:', (error as Error).stack);
+    sendError(
+      res,
+      `Failed to complete consolidation: ${(error as Error).message}`,
+      500
+    );
   }
 };
 
@@ -462,15 +468,10 @@ export const getConsolidationStatistics = async (
 
     const [total, byStatus, avgProcessingTime, todayCompleted] =
       await Promise.all([
-        // Total consolidations
         Consolidation.countDocuments(),
-
-        // By status
         Consolidation.aggregate([
           { $group: { _id: '$status', count: { $sum: 1 } } },
         ]),
-
-        // Average processing time
         Consolidation.aggregate([
           {
             $match: {
@@ -492,8 +493,6 @@ export const getConsolidationStatistics = async (
             },
           },
         ]),
-
-        // Completed today
         Consolidation.countDocuments({
           status: 'completed',
           actualCompletion: {
@@ -507,7 +506,6 @@ export const getConsolidationStatistics = async (
       statusBreakdown[item._id] = item.count;
     });
 
-    // Convert milliseconds to days
     const avgDays = avgProcessingTime[0]?.avgTime
       ? Math.round(avgProcessingTime[0].avgTime / (1000 * 60 * 60 * 24))
       : 0;
@@ -544,7 +542,6 @@ export const deleteConsolidation = async (
     }
 
     const { id } = req.params;
-
     console.log(`🗑️ Deleting consolidation ${id}`);
 
     const consolidation = await Consolidation.findById(id);
@@ -554,25 +551,21 @@ export const deleteConsolidation = async (
       return;
     }
 
-    // Can only delete/cancel if not completed
     if (consolidation.status === 'completed') {
       sendError(res, 'Cannot delete completed consolidations', 400);
       return;
     }
 
-    // Revert package statuses
     await Package.updateMany(
       { _id: { $in: consolidation.packageIds } },
       { $set: { status: 'received', consolidationId: null } }
     );
 
-    // Mark as cancelled instead of deleting
     consolidation.status = 'cancelled';
     await consolidation.save();
 
     console.log('✅ Consolidation cancelled');
 
-    // Notify user
     await createNotification({
       userId: consolidation.userId,
       type: 'consolidation_complete',

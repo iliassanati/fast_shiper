@@ -122,6 +122,17 @@ const packageSchema = new Schema<IPackageDocument>(
       trim: true,
       default: '',
     },
+    isConsolidatedResult: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    originalPackageIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Package',
+      },
+    ],
   },
   {
     timestamps: true,

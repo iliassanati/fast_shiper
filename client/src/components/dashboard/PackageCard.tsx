@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { Calendar, Package as PackageIcon, ShoppingBag } from 'lucide-react';
 import type { Package } from '@/types/client.types';
+import ConsolidatedBadge from './ConsolidatedBadge';
 
 interface PackageCardProps {
   package: Package;
@@ -23,6 +24,12 @@ export default function PackageCard({
       onClick={onClick}
       className='bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all border border-slate-100 cursor-pointer'
     >
+      {pkg.isConsolidatedResult && (
+        <ConsolidatedBadge
+          originalCount={pkg.originalPackageIds?.length || 0}
+          onViewDetails={onClick}
+        />
+      )}
       <div className='flex items-start justify-between mb-4'>
         <div className='text-5xl'>{pkg.photo}</div>
         <span

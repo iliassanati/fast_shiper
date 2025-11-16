@@ -569,11 +569,11 @@ export default function ProfilePage() {
                   <div className='flex items-start justify-between mb-4'>
                     <div className='flex-1'>
                       <h3 className='font-bold text-slate-900 text-lg mb-1'>
-                        {request.packageId.description}
+                        {request?.packageId?.description}
                       </h3>
                       <p className='text-sm text-slate-600'>
-                        From {request.packageId.retailer} • Tracking:{' '}
-                        {request.packageId.trackingNumber}
+                        From {request?.packageId?.retailer} • Tracking:{' '}
+                        {request?.packageId?.trackingNumber}
                       </p>
                     </div>
                     <span

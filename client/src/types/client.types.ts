@@ -24,6 +24,11 @@ export interface Package {
   storageDay: number;
   status: PackageStatus;
   estimatedValue: string;
+  // NEW: Consolidated package fields
+  isConsolidatedResult?: boolean;
+  originalPackageIds?: string[];
+  consolidationId?: string | null;
+  notes?: string;
 }
 
 export interface Shipment {

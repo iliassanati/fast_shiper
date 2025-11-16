@@ -475,10 +475,10 @@ export default function AdminPhotoRequestsPage() {
                     <td className='px-6 py-4'>
                       <div>
                         <p className='font-medium text-slate-900'>
-                          {req.packageId.description}
+                          {req?.packageId?.description}
                         </p>
                         <p className='text-sm text-slate-500'>
-                          {req.packageId.trackingNumber}
+                          {req?.packageId?.trackingNumber}
                         </p>
                       </div>
                     </td>
@@ -631,15 +631,15 @@ export default function AdminPhotoRequestsPage() {
                     <div className='bg-slate-50 rounded-lg p-4 space-y-2'>
                       <p>
                         <strong>Description:</strong>{' '}
-                        {selectedRequest.packageId.description}
+                        {selectedRequest?.packageId?.description}
                       </p>
                       <p>
                         <strong>Tracking:</strong>{' '}
-                        {selectedRequest.packageId.trackingNumber}
+                        {selectedRequest?.packageId?.trackingNumber}
                       </p>
                       <p>
                         <strong>Retailer:</strong>{' '}
-                        {selectedRequest.packageId.retailer}
+                        {selectedRequest?.packageId?.retailer}
                       </p>
                     </div>
                   </div>

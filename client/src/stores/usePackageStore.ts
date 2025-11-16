@@ -104,83 +104,66 @@ export const usePackageStore = create<PackageState>()(
 
       try {
         console.log('🔍 Fetching packages with filters:', filters);
-        console.log(
-          '🔑 Token in localStorage:',
-          !!localStorage.getItem('auth-token')
-        );
 
         const response = await apiHelpers.get<{
           packages: any[];
           pagination: any;
         }>('/packages', filters);
 
-        console.log('📦 API Response received');
-        console.log('📦 Response structure:', {
-          hasPackages: !!response.packages,
-          packagesCount: response.packages?.length || 0,
-          hasPagination: !!response.pagination,
-        });
-
-        // Handle empty response
         if (!response.packages) {
-          console.warn('⚠️ No packages array in response');
           set({ packages: [], loading: false, initialized: true });
           return;
         }
 
-        // Handle empty packages array (valid response, just no packages yet)
-        if (response.packages.length === 0) {
-          console.log('ℹ️ User has no packages yet');
-          set({ packages: [], loading: false, initialized: true, error: null });
-          return;
-        }
+        // Transform backend data
+        const allPackages = response.packages.map((pkg: any) => ({
+          id: pkg._id || pkg.id,
+          description: pkg.description || 'No description',
+          retailer: pkg.retailer || 'Unknown',
+          trackingNumber: pkg.trackingNumber || 'N/A',
+          weight: `${pkg.weight?.value || 0}`,
+          dimensions: `${pkg.dimensions?.length || 0}x${
+            pkg.dimensions?.width || 0
+          }x${pkg.dimensions?.height || 0}`,
+          photo: getEmojiForRetailer(pkg.retailer || 'Unknown'),
+          receivedDate: pkg.receivedDate
+            ? new Date(pkg.receivedDate).toISOString().split('T')[0]
+            : new Date().toISOString().split('T')[0],
+          storageDay: pkg.storageDay || 0,
+          status: pkg.status || 'received',
+          estimatedValue: `$${pkg.estimatedValue?.amount || 0}`,
+          // NEW: Consolidated package fields
+          isConsolidatedResult: pkg.isConsolidatedResult || false,
+          originalPackageIds: pkg.originalPackageIds || [],
+          consolidationId: pkg.consolidationId || null,
+          notes: pkg.notes || '',
+        }));
 
-        // Transform backend data to frontend format
-        const packages = response.packages.map((pkg: any, index: number) => {
-          return {
-            id: pkg._id || pkg.id,
-            description: pkg.description || 'No description',
-            retailer: pkg.retailer || 'Unknown',
-            trackingNumber: pkg.trackingNumber || 'N/A',
-            weight: `${pkg.weight?.value || 0}`,
-            dimensions: `${pkg.dimensions?.length || 0}x${
-              pkg.dimensions?.width || 0
-            }x${pkg.dimensions?.height || 0}`,
-            photo: getEmojiForRetailer(pkg.retailer || 'Unknown'),
-            receivedDate: pkg.receivedDate
-              ? new Date(pkg.receivedDate).toISOString().split('T')[0]
-              : new Date().toISOString().split('T')[0],
-            storageDay: pkg.storageDay || 0,
-            status: pkg.status || 'received',
-            estimatedValue: `$${pkg.estimatedValue?.amount || 0}`,
-          };
-        });
+        // 🔥 FILTER: Hide packages with status 'consolidated' (old packages)
+        const visiblePackages = allPackages.filter(
+          (pkg: any) => pkg.status !== 'consolidated'
+        );
 
-        console.log('✅ Successfully transformed packages:', packages.length);
-        if (packages.length > 0) {
-          console.log('📊 Sample package:', packages[0]);
-        }
-
-        set({ packages, loading: false, initialized: true, error: null });
-      } catch (error: any) {
-        console.error('❌ Error fetching packages:', error);
-        console.error('❌ Error response:', error.response?.data);
-        console.error('❌ Error status:', error.response?.status);
-
-        const errorMessage =
-          error.response?.data?.error ||
-          error.message ||
-          'Failed to fetch packages';
+        console.log(
+          `✅ Showing ${visiblePackages.length} packages (filtered out ${
+            allPackages.length - visiblePackages.length
+          } consolidated)`
+        );
 
         set({
-          error: errorMessage,
+          packages: visiblePackages,
+          loading: false,
+          initialized: true,
+          error: null,
+        });
+      } catch (error: any) {
+        console.error('❌ Error fetching packages:', error);
+        set({
+          error: error.message || 'Failed to fetch packages',
           loading: false,
           initialized: true,
           packages: [],
         });
-
-        // Don't throw error, just log it
-        console.error('❌ Package fetch failed with message:', errorMessage);
       }
     },
 
