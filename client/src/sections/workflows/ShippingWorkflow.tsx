@@ -108,18 +108,24 @@ const ShippingWorkflow: React.FC<ShippingWorkflowProps> = ({
 
   // Handle rate fetch
   const handleFetchRates = async () => {
-    if (!destination.city || !destination.postalCode) {
-      showToast('Please fill in all destination fields', 'warning');
+    // 🔥 UPDATED: Include phone validation
+    if (!destination.city || !destination.postalCode || !destination.phone) {
+      showToast(
+        'Please fill in all destination fields including phone number',
+        'warning'
+      );
       return;
     }
 
     const dimensions = getDimensions();
 
+    // 🔥 UPDATED: Pass phone to API
     await fetchRates({
       weight: totalWeight,
       dimensions,
       destinationCity: destination.city,
       destinationPostalCode: destination.postalCode,
+      destinationPhone: destination.phone, // 🔥 NEW
       declaredValue: totalValue,
     });
 

@@ -1,3 +1,4 @@
+// client/src/hooks/useShippingRates.ts - UPDATED WITH PHONE
 import { useState, useCallback } from 'react';
 import { apiHelpers } from '@/lib/api';
 import { useNotificationStore } from '@/stores';
@@ -23,6 +24,7 @@ export function useShippingRates() {
       dimensions: { length: number; width: number; height: number };
       destinationPostalCode?: string;
       destinationCity?: string;
+      destinationPhone?: string; // 🔥 NEW: Phone parameter
       declaredValue?: number;
     }) => {
       setLoading(true);

@@ -36,6 +36,7 @@ export const getShippingRates = async (
       destinationCountryCode = 'MA',
       destinationCity,
       destinationPostalCode,
+      destinationPhone, // 🔥 NEW
       declaredValue,
     } = req.body;
 
@@ -44,7 +45,7 @@ export const getShippingRates = async (
     console.log('📦 ========================================');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
 
-    // FIXED: Better validation with specific error messages
+    // Validations
     if (!weight || parseFloat(weight) <= 0) {
       sendError(res, 'Valid weight is required (must be greater than 0)', 400);
       return;
@@ -74,7 +75,16 @@ export const getShippingRates = async (
       return;
     }
 
-    // FIXED: Check if Shippo is configured
+    // 🔥 NEW VALIDATION
+    if (!destinationPhone || destinationPhone.trim().length === 0) {
+      sendError(
+        res,
+        'Destination phone number is required for carriers like DHL',
+        400
+      );
+      return;
+    }
+
     if (!shippoService.isConfigured()) {
       console.error('❌ Shippo service is not configured!');
       sendError(
@@ -100,6 +110,7 @@ export const getShippingRates = async (
       destinationCountryCode,
       destinationCity: destinationCity.trim(),
       destinationPostalCode: destinationPostalCode.trim(),
+      destinationPhone: destinationPhone.trim(), // 🔥 NEW
       declaredValue: declaredValue ? parseFloat(declaredValue) : undefined,
     });
 
@@ -123,15 +134,16 @@ export const getShippingRates = async (
   } catch (error: any) {
     console.error('❌ Error getting shipping rates:', error);
 
-    // FIXED: Better error messages for users
     let userMessage = 'Failed to get shipping rates';
 
     if (error.message.includes('not configured')) {
       userMessage =
         'Shipping service is temporarily unavailable. Please try again later.';
-    } else if (error.message.includes('Destination')) {
-      userMessage =
-        'Invalid destination address. Please check your city and postal code.';
+    } else if (
+      error.message.includes('Destination') ||
+      error.message.includes('phone')
+    ) {
+      userMessage = 'Please provide a valid destination phone number.';
     } else if (error.message.includes('Shippo')) {
       userMessage = error.message;
     }
