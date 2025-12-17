@@ -45,3 +45,9 @@ Phone
 // aramex api
 
 sdsdd
+
+
+installHook.js:1 ❌ Payment completion failed: TypeError: onComplete is not a function
+    at handlePaymentComplete (ShippingWorkflow.tsx:252:5)
+    at handleStripeSuccess (PaymentMethod.tsx:76:7)
+    at handleSubmit (StripePayment.tsx:85:7)

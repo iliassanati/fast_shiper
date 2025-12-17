@@ -13,7 +13,8 @@ import { apiHelpers } from '@/lib/api';
 
 export default function ShippingPage() {
   const navigate = useNavigate();
-  const { updatePackage, fetchPackages } = usePackageStore();
+  const { updatePackage, fetchPackages, packages } = usePackageStore();
+
   const { addShipment, fetchShipments } = useShipmentStore();
   const { refreshStats } = useDashboardStore();
   const { showToast } = useNotificationStore();
@@ -81,6 +82,7 @@ export default function ShippingPage() {
         onClose={handleClose}
         onSubmit={handleSubmit}
         submitting={submitting}
+        selectedPackages={packages}
       />
     </DashboardLayout>
   );
