@@ -1,0 +1,47 @@
+Name
+
+ilias sanati
+
+
+Copy
+Address Line 1
+
+472 Amherst St.
+
+
+Copy
+Address Line 2  (SUITE NUMBER)
+
+Unit 71017425
+
+
+Copy
+City
+
+Nashua
+
+
+Copy
+State
+
+NH
+
+
+Copy
+Zip
+
+03063
+
+
+Copy
+Phone
+
+781-491-0874
+
+
+
+/// admin packages, remove 50dh
+// remove consolidation fee and total weight
+// aramex api
+
+sdsdd
