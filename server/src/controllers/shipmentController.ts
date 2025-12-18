@@ -506,25 +506,49 @@ export const getShipments = async (
     }
 
     const { status, page = 1, limit = 20 } = req.query;
-
-    const filters: any = {
-      userId: req.user.userId,
+    const query: any = {
+      user: req.user.userId,
     };
 
     if (status) {
-      filters.status = status;
+      query.status = status;
     }
 
-    const shipments = await Shipment.find(filters)
-      .populate('packageIds', 'description retailer trackingNumber')
+    // Fetch shipments with proper population
+    const shipments = await Shipment.find(query)
+      .populate('packages', 'description retailer trackingNumber')
+      .populate('user', 'name email')
       .sort({ createdAt: -1 })
       .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
+      .skip((Number(page) - 1) * Number(limit))
+      .lean(); // Use lean for better performance
 
-    const total = await Shipment.countDocuments(filters);
+    const total = await Shipment.countDocuments(query);
+
+    console.log(`✅ Found ${shipments.length} shipments`);
+
+    // Transform shipments to match frontend expectations
+    const transformedShipments = shipments.map((s: any) => ({
+      id: s._id.toString(),
+      trackingNumber: s.trackingNumber || 'PENDING',
+      carrier: s.carrier,
+      status: s.status,
+      shippedDate: s.createdAt
+        ? new Date(s.createdAt).toISOString().split('T')[0]
+        : null,
+      estimatedDelivery: s.estimatedDelivery
+        ? new Date(s.estimatedDelivery).toISOString().split('T')[0]
+        : 'TBD',
+      deliveredDate: s.deliveredAt
+        ? new Date(s.deliveredAt).toISOString().split('T')[0]
+        : null,
+      destination: s.recipientInfo?.city || 'Unknown',
+      packages: Array.isArray(s.packages) ? s.packages.length : 0,
+      cost: `$${s.totalCost || 0} USD`,
+    }));
 
     sendSuccess(res, {
-      shipments,
+      shipments: transformedShipments,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -555,17 +579,50 @@ export const getShipmentById = async (
 
     const { id } = req.params;
 
+    console.log('📦 Fetching shipment:', id);
+
+    // Query using correct field name 'user' (not 'userId')
     const shipment = await Shipment.findOne({
       _id: id,
-      userId: req.user.userId,
-    }).populate('packageIds');
+      user: req.user.userId,
+    })
+      .populate('packages')
+      .lean();
 
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
       return;
     }
 
-    sendSuccess(res, { shipment });
+    console.log('✅ Shipment found:', shipment._id);
+
+    // Transform shipment to match frontend expectations
+    const transformedShipment = {
+      id: shipment._id.toString(),
+      trackingNumber: shipment.trackingNumber || 'PENDING',
+      carrier: shipment.carrier,
+      serviceLevelName: shipment.serviceLevelName,
+      status: shipment.status,
+      shippedDate: shipment.createdAt
+        ? new Date(shipment.createdAt).toISOString().split('T')[0]
+        : null,
+      estimatedDelivery: shipment.estimatedDelivery
+        ? new Date(shipment.estimatedDelivery).toISOString().split('T')[0]
+        : 'TBD',
+      deliveredDate: shipment.deliveredAt
+        ? new Date(shipment.deliveredAt).toISOString().split('T')[0]
+        : null,
+      destination: shipment.recipientInfo?.city || 'Unknown',
+      packages: Array.isArray(shipment.packages) ? shipment.packages.length : 0,
+      cost: `$${shipment.totalCost || 0} USD`,
+      recipientInfo: shipment.recipientInfo,
+      labelUrl: shipment.labelUrl,
+      trackingUrl: shipment.trackingUrl,
+      weight: shipment.weight,
+      dimensions: shipment.dimensions,
+    };
+
+    sendSuccess(res, { shipment: transformedShipment });
   } catch (error: any) {
     console.error('❌ Error getting shipment:', error);
     sendError(res, error.message || 'Failed to get shipment', 500);

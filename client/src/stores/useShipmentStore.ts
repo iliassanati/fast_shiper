@@ -81,34 +81,40 @@ export const useShipmentStore = create<ShipmentState>()(
     fetchShipments: async (filters) => {
       set({ loading: true, error: null });
       try {
+        console.log('🚚 Fetching shipments from API...');
+
         const response = await apiHelpers.get<{
           shipments: any[];
           pagination: any;
         }>('/shipments', filters);
 
-        // Transform backend data to frontend format
+        console.log('✅ Raw response:', response);
+
+        if (!response.shipments) {
+          console.warn('⚠️ No shipments in response');
+          set({ shipments: [], loading: false, initialized: true });
+          return;
+        }
+
+        // Transform already done by backend, just ensure correct format
         const shipments = response.shipments.map((s: any) => ({
-          id: s._id || s.id,
-          trackingNumber: s.trackingNumber,
+          id: s.id || s._id,
+          trackingNumber: s.trackingNumber || 'PENDING',
           carrier: s.carrier,
           status: s.status,
-          shippedDate: s.shippedDate
-            ? new Date(s.shippedDate).toISOString().split('T')[0]
-            : null,
-          estimatedDelivery: new Date(s.estimatedDelivery)
-            .toISOString()
-            .split('T')[0],
-          deliveredDate: s.actualDelivery
-            ? new Date(s.actualDelivery).toISOString().split('T')[0]
-            : null,
-          destination: s.destination.city,
-          packages: s.packageIds.length,
-          cost: `${s.cost.total} ${s.cost.currency}`,
+          shippedDate: s.shippedDate,
+          estimatedDelivery: s.estimatedDelivery,
+          deliveredDate: s.deliveredDate,
+          destination: s.destination,
+          packages: s.packages || 0,
+          cost: s.cost,
         }));
+
+        console.log(`✅ Loaded ${shipments.length} shipments`);
 
         set({ shipments, loading: false, initialized: true });
       } catch (error: any) {
-        console.error('Error fetching shipments:', error);
+        console.error('❌ Error fetching shipments:', error);
         set({
           error: error.response?.data?.error || 'Failed to fetch shipments',
           loading: false,
@@ -120,34 +126,47 @@ export const useShipmentStore = create<ShipmentState>()(
     fetchShipmentById: async (id: string) => {
       set({ loading: true, error: null });
       try {
+        console.log('🔍 Fetching shipment by ID:', id);
+
         const response = await apiHelpers.get<{ shipment: any }>(
           `/shipments/${id}`
         );
 
+        console.log('✅ Shipment response:', response.shipment);
+
         const s = response.shipment;
         const transformedShipment: Shipment = {
-          id: s._id || s.id,
-          trackingNumber: s.trackingNumber,
+          id: s.id || s._id,
+          trackingNumber: s.trackingNumber || 'PENDING',
           carrier: s.carrier,
           status: s.status,
-          shippedDate: s.shippedDate
-            ? new Date(s.shippedDate).toISOString().split('T')[0]
-            : null,
-          estimatedDelivery: new Date(s.estimatedDelivery)
-            .toISOString()
-            .split('T')[0],
-          deliveredDate: s.actualDelivery
-            ? new Date(s.actualDelivery).toISOString().split('T')[0]
-            : null,
-          destination: s.destination.city,
-          packages: s.packageIds.length,
-          cost: `${s.cost.total} ${s.cost.currency}`,
+          shippedDate: s.shippedDate,
+          estimatedDelivery: s.estimatedDelivery,
+          deliveredDate: s.deliveredDate,
+          destination: s.destination,
+          packages: s.packages || 0,
+          cost: s.cost,
         };
 
-        get().updateShipment(id, transformedShipment);
-        set({ loading: false });
+        // Update or add to store
+        set((state) => {
+          const existingIndex = state.shipments.findIndex((sh) => sh.id === id);
+          if (existingIndex >= 0) {
+            const newShipments = [...state.shipments];
+            newShipments[existingIndex] = transformedShipment;
+            return { shipments: newShipments, loading: false };
+          } else {
+            return {
+              shipments: [transformedShipment, ...state.shipments],
+              loading: false,
+            };
+          }
+        });
+
+        console.log('✅ Shipment loaded successfully');
         return transformedShipment;
       } catch (error: any) {
+        console.error('❌ Error fetching shipment:', error);
         set({
           error: error.response?.data?.error || 'Failed to fetch shipment',
           loading: false,

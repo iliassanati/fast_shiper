@@ -32,12 +32,12 @@ export default function ShipmentsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 🔥 FIX: Fetch shipments on mount
   useEffect(() => {
     const loadShipments = async () => {
       try {
         console.log('📦 Loading shipments...');
         await fetchShipments({ limit: 100 });
+        console.log('✅ Shipments loaded:', shipments.length);
       } catch (error) {
         console.error('❌ Error loading shipments:', error);
         showToast('Failed to load shipments', 'error');
@@ -210,7 +210,7 @@ export default function ShipmentsPage() {
             <h1 className='text-3xl font-bold text-slate-900'>My Shipments</h1>
             <p className='text-slate-600'>
               {filteredShipments.length} of {shipments.length} shipments
-              {filterStatus !== 'all' && ` (filtered by ${filterStatus})`}
+              {/* {filterStatus !== 'all' && ` (filtered by ${filterStatus})`} */}
             </p>
           </div>
 

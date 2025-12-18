@@ -2,11 +2,11 @@
 import PackageCard from '@/components/dashboard/PackageCard';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import {
+  useDashboardStore,
   useNotificationStore,
   usePackageStore,
-  useDashboardStore,
 } from '@/stores';
-import type { PackageStatus, Package } from '@/types/client.types';
+import type { PackageStatus } from '@/types/client.types';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Archive,
@@ -14,17 +14,16 @@ import {
   Camera,
   Check,
   Filter,
+  Loader2,
   Package as PackageIcon,
   RefreshCw,
   Search,
+  Sparkles,
   Truck,
   X,
-  Info,
-  Sparkles,
-  Loader2,
 } from 'lucide-react';
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function PackagesPage() {
   const navigate = useNavigate();
@@ -39,7 +38,6 @@ export default function PackagesPage() {
     loading,
     filterStatus,
     setFilterStatus,
-    getAvailableForConsolidation,
   } = usePackageStore();
 
   const { updateStatsFromPackages } = useDashboardStore();
@@ -75,9 +73,6 @@ export default function PackagesPage() {
 
   // FIX: Clear selection when leaving page (except for workflow pages)
   useEffect(() => {
-    // Store the current path when component mounts
-    const currentPath = location.pathname;
-
     return () => {
       // Get the NEW path we're navigating TO
       const workflowPaths = ['/consolidation', '/shipping', '/request-info'];

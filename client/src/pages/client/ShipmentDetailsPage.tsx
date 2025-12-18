@@ -23,8 +23,19 @@ export default function ShipmentDetailsPage() {
 
   useEffect(() => {
     if (id) {
-      const shipmentData = getShipmentById(id);
-      setShipment(shipmentData);
+      const loadShipment = async () => {
+        try {
+          console.log('📦 Loading shipment details:', id);
+          const shipmentData = await getShipmentById(id);
+          setShipment(shipmentData);
+          console.log('✅ Shipment loaded:', shipmentData);
+        } catch (error) {
+          console.error('❌ Failed to load shipment:', error);
+          setShipment(null);
+        }
+      };
+
+      loadShipment();
     }
   }, [id, getShipmentById]);
 
