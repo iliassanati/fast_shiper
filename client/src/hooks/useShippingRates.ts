@@ -39,7 +39,7 @@ export function useShippingRates() {
           {
             ...params,
             originCountryCode: 'US',
-            destinationCountryCode: 'US',
+            destinationCountryCode: 'MA',
           }
         );
 

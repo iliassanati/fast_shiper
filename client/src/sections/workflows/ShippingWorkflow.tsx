@@ -32,14 +32,14 @@ interface ShippingWorkflowProps {
     hasExtraProtection: boolean;
     photoRequests: number;
   };
-  onComplete: (shippingData: any) => void;
+  onSubmit: (shippingData: any) => void;
   onCancel: () => void;
 }
 
 export default function ShippingWorkflow({
   selectedPackages,
   consolidation,
-  onComplete,
+  onSubmit,
   onCancel,
 }: ShippingWorkflowProps) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -228,6 +228,11 @@ export default function ShippingWorkflow({
       protection,
       photoRequests,
       total,
+      packageValue:
+        selectedPackages?.reduce(
+          (sum, pkg) => sum + (getPackageValue(pkg) || 0),
+          0
+        ) || 0,
     };
   };
 
@@ -249,7 +254,7 @@ export default function ShippingWorkflow({
     };
 
     console.log('✅ Shipping workflow complete:', shippingData);
-    onComplete(shippingData);
+    onSubmit(shippingData);
   };
 
   const costs = calculateCosts();

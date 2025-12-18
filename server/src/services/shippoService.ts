@@ -200,7 +200,8 @@ function calculateEELPFC(declaredValue: number): string {
 
   // For shipments over $2,500, you need an AES filing
   // This is a placeholder - in production, integrate with AES system
-  return 'AES X20XXXXXXXXXX'; // Replace with actual AES ITN
+  //return 'AES X20XXXXXXXXXX'; // Replace with actual AES ITN
+  return 'NOEEI 30.37(a)';
 }
 
 /**
@@ -464,6 +465,19 @@ export async function getRates(
 
     // Filter available rates
     console.log(`📊 Total rates returned: ${response.data.rates.length}`);
+
+    // 🔥 ADD: Log each rate with availability
+    response.data.rates.forEach((rate: any, index: number) => {
+      console.log(`\n📋 Rate ${index + 1}:`, {
+        provider: rate.provider,
+        service: rate.servicelevel?.name,
+        amount: rate.amount,
+        currency: rate.currency,
+        available: rate.available,
+        messages: rate.messages,
+        attributes: rate.attributes,
+      });
+    });
 
     const availableRates = response.data.rates.filter(
       (rate: any) =>
