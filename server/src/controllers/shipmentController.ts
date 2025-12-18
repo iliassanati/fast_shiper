@@ -227,9 +227,9 @@ function formatPhoneNumber(phone: string): string {
 /**
  * Create a new shipment
  */
-export async function createNewShipment(req: Request, res: Response) {
+export async function createNewShipment(req: AuthRequest, res: Response) {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.userId);
+    const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -239,7 +239,7 @@ export async function createNewShipment(req: Request, res: Response) {
     const requestData = req.body;
     console.log('📦 Package IDs:', requestData.packageIds);
 
-    // ✅ VALIDATE required fields from frontend
+    // ✅ VALIDATE required fields
     if (!requestData.packageIds || requestData.packageIds.length === 0) {
       return res
         .status(400)
@@ -250,12 +250,6 @@ export async function createNewShipment(req: Request, res: Response) {
       return res.status(400).json({ error: 'Destination address is required' });
     }
 
-    // 🔍 LOG: Check if we have rate object ID
-    console.log(
-      '🌐 Creating Shippo shipment with rate:',
-      requestData.rateObjectId
-    );
-
     if (!requestData.rateObjectId) {
       return res.status(400).json({ error: 'Rate object ID is required' });
     }
@@ -264,7 +258,6 @@ export async function createNewShipment(req: Request, res: Response) {
     // 🔥 FORMAT DATA FOR SHIPPO API
     // ======================================
 
-    // 1. Format destination address
     const addressTo = {
       name: requestData.destination.fullName,
       street1: requestData.destination.street,
@@ -272,14 +265,12 @@ export async function createNewShipment(req: Request, res: Response) {
       city: requestData.destination.city,
       state: requestData.destination.state || '',
       zip: requestData.destination.postalCode || '',
-      country: formatCountryCode(requestData.destination.country),
-      phone: formatPhoneNumber(requestData.destination.phone),
+      country: 'MA',
+      phone: requestData.destination.phone,
       email: requestData.destination.email || '',
+      validate: false,
     };
 
-    console.log('📍 Formatted destination:', addressTo);
-
-    // 2. Format origin address (warehouse)
     const addressFrom = {
       name: 'Fast Shipper Warehouse',
       street1: '123 Warehouse St',
@@ -289,23 +280,38 @@ export async function createNewShipment(req: Request, res: Response) {
       country: 'US',
       phone: '+13055551234',
       email: 'warehouse@fastshipper.com',
+      validate: false,
     };
 
-    // 3. Format parcels from weight/dimensions
+    // Get total weight and dimensions from packages
+    const packages = await Package.find({
+      _id: { $in: requestData.packageIds },
+    });
+
+    let totalWeight = packages.reduce(
+      (sum, pkg) => sum + (pkg.weight?.value || 0),
+      0
+    );
+
+    // Convert kg to lb if needed
+    if (totalWeight > 0) {
+      totalWeight = totalWeight * 2.20462; // kg to lb
+    } else {
+      totalWeight = 2.5; // default
+    }
+
     const parcels = [
       {
         length: String(requestData.dimensions?.length || 12),
         width: String(requestData.dimensions?.width || 10),
         height: String(requestData.dimensions?.height || 8),
-        distance_unit: requestData.dimensions?.unit === 'cm' ? 'cm' : 'in',
-        weight: String(requestData.weight?.total || 2.5),
-        mass_unit: requestData.weight?.unit === 'kg' ? 'kg' : 'lb',
+        distance_unit: 'in',
+        weight: String(totalWeight.toFixed(2)),
+        mass_unit: 'lb',
       },
     ];
 
-    console.log('📦 Formatted parcels:', parcels);
-
-    // 4. Format customs declaration (if international)
+    // Create customs declaration if international
     let customsDeclaration = null;
     const isInternational = addressTo.country !== 'US';
 
@@ -320,6 +326,7 @@ export async function createNewShipment(req: Request, res: Response) {
         non_delivery_option: 'RETURN',
         certify: true,
         certify_signer: addressTo.name,
+        incoterm: 'DDU',
         items: requestData.customsInfo.map((item: any) => ({
           description: item.description,
           quantity: item.quantity,
@@ -330,31 +337,31 @@ export async function createNewShipment(req: Request, res: Response) {
           origin_country: item.countryOfOrigin || 'US',
           tariff_number: item.hsCode || '',
         })),
+        eel_pfc: 'NOEEI 30.37(a)',
       };
-
-      console.log('📋 Formatted customs:', customsDeclaration);
     }
 
-    // 5. Build Shippo transaction data
     const shippoData: any = {
       address_from: addressFrom,
       address_to: addressTo,
       parcels: parcels,
-      rate: requestData.rateObjectId, // ✅ Use the rate object ID
-      metadata: {
-        userId: userId,
-        packageIds: requestData.packageIds.join(','),
-        carrier: requestData.carrier,
-        serviceLevel: requestData.serviceLevel,
+      rate: requestData.rateObjectId,
+      metaData: {
+        user_id: userId.substring(0, 24), // Truncate if needed
+        pkg_count: String(requestData.packageIds.length), // Just the count, not IDs
+        carrier: requestData.carrier.substring(0, 10), // Shorten carrier name}
+        // metadata: {
+        //   userId: userId,
+        //   packageIds: requestData.packageIds.join(','),
+        //   carrier: requestData.carrier,
+        //   serviceLevel: requestData.serviceLevel,
       },
     };
 
-    // Add customs if international
     if (customsDeclaration) {
       shippoData.customs_declaration = customsDeclaration;
     }
 
-    // Add insurance if enabled
     if (requestData.insurance?.enabled && requestData.insurance.coverage > 0) {
       shippoData.insurance_amount = String(requestData.insurance.coverage);
       shippoData.insurance_currency = 'USD';
@@ -385,28 +392,73 @@ export async function createNewShipment(req: Request, res: Response) {
     );
 
     // Create shipment record
+    // Create shipment record
     const newShipment = await Shipment.create({
-      userId,
-      packageIds: requestData.packageIds,
+      user: userId,
+      packages: requestData.packageIds,
       trackingNumber: shippoShipment.tracking_number || 'PENDING',
       carrier: requestData.carrier,
-      serviceLevel: requestData.serviceLevel,
-      destination: requestData.destination,
+      serviceLevelName: requestData.serviceLevel,
       status: shippoShipment.status === 'SUCCESS' ? 'in_transit' : 'pending',
-      cost: requestData.cost,
+      recipientInfo: {
+        name: requestData.destination.fullName, // fullName → name
+        address: requestData.destination.street, // street → address
+        city: requestData.destination.city,
+        state: requestData.destination.state || '',
+        postalCode: requestData.destination.postalCode,
+        country: requestData.destination.country,
+        phone: requestData.destination.phone,
+        email: requestData.destination.email || '',
+      },
+      dimensions: requestData.dimensions || {
+        length: 12,
+        width: 10,
+        height: 8,
+      },
+      weight: totalWeight,
+      declaredValue: requestData.insurance?.coverage || 0,
+      shippingCost: requestData.cost?.shipping || 0,
+      photoRequestFees: requestData.cost?.photoRequests || 0,
+      protectionFee: requestData.cost?.protection || 0,
+      totalCost: requestData.cost?.total || 0,
+      paymentStatus: requestData.payment ? 'paid' : 'pending',
+      paymentIntentId: requestData.payment?.transactionId,
       labelUrl: shippoShipment.label_url,
       trackingUrl: shippoShipment.tracking_url_provider,
-      shippoTransactionId: shippoShipment.object_id,
       estimatedDelivery: shippoShipment.eta,
-      shippedDate: new Date(),
-      insurance: requestData.insurance,
-      customsInfo: requestData.customsInfo,
-      weight: requestData.weight,
-      dimensions: requestData.dimensions,
-      notes: requestData.notes,
+      shippoTransactionId: shippoShipment.object_id,
     });
 
     console.log('✅ Shipment saved to database:', newShipment._id);
+
+    // ======================================
+    // 💰 CREATE TRANSACTION RECORD
+    // ======================================
+
+    // 🔥 NEW: Create transaction for admin tracking
+    await createTransaction({
+      userId: userId,
+      type: 'shipping',
+      relatedId: newShipment._id,
+      relatedModel: 'Shipment',
+      status: requestData.payment ? 'completed' : 'pending',
+      amount: {
+        value: requestData.cost?.total || 0,
+        currency: 'USD',
+      },
+      paymentMethod: requestData.payment?.paymentMethod || 'pending',
+      description: `Shipment ${newShipment.trackingNumber} - ${requestData.carrier}`,
+      metadata: {
+        carrier: requestData.carrier,
+        serviceLevel: requestData.serviceLevel,
+        trackingNumber: newShipment.trackingNumber,
+        packageCount: requestData.packageIds.length,
+        paymentTransactionId: requestData.payment?.transactionId,
+      },
+      completedAt: requestData.payment ? new Date() : undefined,
+    });
+
+    console.log('✅ Transaction record created');
 
     // ======================================
     // 📤 RESPOND TO FRONTEND
@@ -414,20 +466,23 @@ export async function createNewShipment(req: Request, res: Response) {
 
     return res.status(201).json({
       success: true,
-      shipment: {
-        id: newShipment._id,
-        trackingNumber: newShipment.trackingNumber,
-        labelUrl: newShipment.labelUrl,
-        trackingUrl: newShipment.trackingUrl,
-        carrier: newShipment.carrier,
-        status: newShipment.status,
-        estimatedDelivery: newShipment.estimatedDelivery,
+      data: {
+        shipment: {
+          id: newShipment._id,
+          trackingNumber: newShipment.trackingNumber,
+          labelUrl: newShipment.labelUrl,
+          trackingUrl: newShipment.trackingUrl,
+          carrier: newShipment.carrier,
+          status: newShipment.status,
+          estimatedDelivery: newShipment.estimatedDelivery,
+        },
       },
     });
   } catch (error: any) {
     console.error('❌ Error creating shipment:', error);
 
     return res.status(500).json({
+      success: false,
       error: 'Failed to create shipment',
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,

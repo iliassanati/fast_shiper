@@ -549,9 +549,13 @@ export async function getRates(
 
 /**
  * Create a Shippo shipment transaction
- * @improved Better error handling and validation
+ * @improved Fixed "shippo is not defined" error
  */
 export async function createShipment(shipmentData: any) {
+  if (!configured) {
+    throw new Error('Shippo service is not configured');
+  }
+
   try {
     // 🔍 LOG: Data being sent to Shippo
     console.log('📦 Creating Shippo shipment...');
@@ -618,16 +622,14 @@ export async function createShipment(shipmentData: any) {
       });
     }
 
-    // Validate rate or carrier account
-    if (!shipmentData.rate && !shipmentData.carrier_account) {
-      validationErrors.push(
-        'Missing both rate and carrier_account (need at least one)'
-      );
+    // Validate rate
+    if (!shipmentData.rate) {
+      validationErrors.push('Missing rate object ID');
     }
 
     // Check for international shipment customs
     const fromCountry = shipmentData.address_from?.country || 'US';
-    const toCountry = shipmentData.address_to?.country || 'US';
+    const toCountry = shipmentData.address_to?.country || 'MA';
     const isInternational = fromCountry !== toCountry;
 
     if (isInternational && !shipmentData.customs_declaration) {
@@ -642,18 +644,20 @@ export async function createShipment(shipmentData: any) {
       throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
     }
 
-    // ✅ All validated, call Shippo API
+    // ✅ All validated, call Shippo API using apiClient
     console.log('✅ Validation passed, calling Shippo API...');
-    const response = await shippo.transaction.create(shipmentData);
+
+    // 🔥 FIX: Use apiClient instead of non-existent 'shippo' object
+    const response = await apiClient.post('/transactions/', shipmentData);
 
     console.log('✅ Shippo shipment created successfully:', {
-      objectId: response.object_id,
-      status: response.status,
-      trackingNumber: response.tracking_number,
-      labelUrl: response.label_url,
+      objectId: response.data.object_id,
+      status: response.data.status,
+      trackingNumber: response.data.tracking_number,
+      labelUrl: response.data.label_url,
     });
 
-    return response;
+    return response.data;
   } catch (error: any) {
     // 🔥 IMPROVED ERROR LOGGING
     console.error('❌ Failed to create Shippo shipment:');
@@ -688,7 +692,6 @@ export async function createShipment(shipmentData: any) {
       } else if (data.error) {
         errorMessage = data.error;
       } else if (data.messages) {
-        // Sometimes Shippo returns array of messages
         errorMessage = Array.isArray(data.messages)
           ? data.messages.join('; ')
           : JSON.stringify(data.messages);
