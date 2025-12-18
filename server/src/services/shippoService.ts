@@ -544,52 +544,162 @@ export async function getRates(
 /**
  * Create shipment and purchase label via Shippo
  */
-export async function createShipment(
-  shipment: any,
-  rateObjectId: string
-): Promise<ShippoShipmentResponse> {
-  if (!configured) {
-    throw new Error('Shippo service is not configured');
-  }
+// 🔧 REPLACE in server/src/services/shippoService.ts
+// Around line 570 in the createShipment function
 
-  console.log('📦 Creating Shippo shipment with rate:', rateObjectId);
-
+/**
+ * Create a Shippo shipment transaction
+ * @improved Better error handling and validation
+ */
+export async function createShipment(shipmentData: any) {
   try {
-    // Purchase the label using the selected rate
-    const transactionResponse = await apiClient.post('/transactions/', {
-      rate: rateObjectId,
-      label_file_type: 'PDF',
-      async: false,
-    });
+    // 🔍 LOG: Data being sent to Shippo
+    console.log('📦 Creating Shippo shipment...');
+    console.log('📋 Shipment data:', JSON.stringify(shipmentData, null, 2));
 
-    const transaction = transactionResponse.data;
+    // ✅ VALIDATE required fields
+    const validationErrors: string[] = [];
 
-    if (transaction.status !== 'SUCCESS') {
-      throw new Error(
-        `Shipment creation failed: ${transaction.messages?.join(', ') || 'Unknown error'}`
+    // Validate destination address
+    if (!shipmentData.address_to) {
+      validationErrors.push('Missing destination address (address_to)');
+    } else {
+      const addr = shipmentData.address_to;
+      if (!addr.name) validationErrors.push('Missing recipient name');
+      if (!addr.street1) validationErrors.push('Missing street address');
+      if (!addr.city) validationErrors.push('Missing city');
+      if (!addr.country) validationErrors.push('Missing country code');
+      if (!addr.phone) validationErrors.push('Missing phone number');
+
+      // Validate country code format (must be 2-letter ISO)
+      if (addr.country && addr.country.length !== 2) {
+        validationErrors.push(
+          `Invalid country code: "${addr.country}" (must be 2-letter ISO code like "MA")`
+        );
+      }
+    }
+
+    // Validate origin address
+    if (!shipmentData.address_from) {
+      validationErrors.push('Missing origin address (address_from)');
+    }
+
+    // Validate parcels
+    if (!shipmentData.parcels || shipmentData.parcels.length === 0) {
+      validationErrors.push('Missing parcels array');
+    } else {
+      shipmentData.parcels.forEach((parcel: any, index: number) => {
+        if (!parcel.length || parseFloat(parcel.length) <= 0) {
+          validationErrors.push(
+            `Parcel ${index + 1}: invalid length (${parcel.length})`
+          );
+        }
+        if (!parcel.width || parseFloat(parcel.width) <= 0) {
+          validationErrors.push(
+            `Parcel ${index + 1}: invalid width (${parcel.width})`
+          );
+        }
+        if (!parcel.height || parseFloat(parcel.height) <= 0) {
+          validationErrors.push(
+            `Parcel ${index + 1}: invalid height (${parcel.height})`
+          );
+        }
+        if (!parcel.weight || parseFloat(parcel.weight) <= 0) {
+          validationErrors.push(
+            `Parcel ${index + 1}: invalid weight (${parcel.weight})`
+          );
+        }
+        if (!parcel.distance_unit) {
+          validationErrors.push(`Parcel ${index + 1}: missing distance_unit`);
+        }
+        if (!parcel.mass_unit) {
+          validationErrors.push(`Parcel ${index + 1}: missing mass_unit`);
+        }
+      });
+    }
+
+    // Validate rate or carrier account
+    if (!shipmentData.rate && !shipmentData.carrier_account) {
+      validationErrors.push(
+        'Missing both rate and carrier_account (need at least one)'
       );
     }
 
-    const result: ShippoShipmentResponse = {
-      objectId: transaction.object_id,
-      trackingNumber: transaction.tracking_number,
-      trackingUrl: transaction.tracking_url_provider,
-      labelUrl: transaction.label_url,
-      carrier: normalizeCarrierName(transaction.rate.provider),
-      serviceLevelName: transaction.rate.servicelevel.name,
-      estimatedDelivery: transaction.eta,
-      rate: {
-        objectId: transaction.rate.object_id,
-        amount: parseFloat(transaction.rate.amount),
-        currency: transaction.rate.currency,
-      },
-    };
+    // Check for international shipment customs
+    const fromCountry = shipmentData.address_from?.country || 'US';
+    const toCountry = shipmentData.address_to?.country || 'US';
+    const isInternational = fromCountry !== toCountry;
 
-    console.log('✅ Shippo shipment created:', result.trackingNumber);
-    return result;
+    if (isInternational && !shipmentData.customs_declaration) {
+      validationErrors.push(
+        `International shipment (${fromCountry} → ${toCountry}) requires customs_declaration`
+      );
+    }
+
+    // If there are validation errors, throw before API call
+    if (validationErrors.length > 0) {
+      console.error('❌ Validation failed:', validationErrors);
+      throw new Error(`Validation errors: ${validationErrors.join('; ')}`);
+    }
+
+    // ✅ All validated, call Shippo API
+    console.log('✅ Validation passed, calling Shippo API...');
+    const response = await shippo.transaction.create(shipmentData);
+
+    console.log('✅ Shippo shipment created successfully:', {
+      objectId: response.object_id,
+      status: response.status,
+      trackingNumber: response.tracking_number,
+      labelUrl: response.label_url,
+    });
+
+    return response;
   } catch (error: any) {
-    console.error('❌ Failed to create Shippo shipment:', error.message);
-    throw error;
+    // 🔥 IMPROVED ERROR LOGGING
+    console.error('❌ Failed to create Shippo shipment:');
+    console.error('Error Message:', error.message);
+
+    if (error.response) {
+      console.error('HTTP Status:', error.response.status);
+      console.error(
+        'Response Data:',
+        JSON.stringify(error.response.data, null, 2)
+      );
+    } else {
+      console.error(
+        'Full Error:',
+        JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+      );
+    }
+
+    // Extract meaningful error message
+    let errorMessage = 'Unknown Shippo API error';
+
+    if (error.response?.data) {
+      const data = error.response.data;
+
+      // Shippo returns errors in different formats
+      if (typeof data === 'string') {
+        errorMessage = data;
+      } else if (data.detail) {
+        errorMessage = data.detail;
+      } else if (data.message) {
+        errorMessage = data.message;
+      } else if (data.error) {
+        errorMessage = data.error;
+      } else if (data.messages) {
+        // Sometimes Shippo returns array of messages
+        errorMessage = Array.isArray(data.messages)
+          ? data.messages.join('; ')
+          : JSON.stringify(data.messages);
+      } else {
+        errorMessage = JSON.stringify(data);
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    throw new Error(`Shippo API error: ${errorMessage}`);
   }
 }
 

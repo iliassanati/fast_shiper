@@ -152,331 +152,288 @@ export const getShippingRates = async (
   }
 };
 
+// 🔧 COMPLETE FIX for server/src/controllers/shipmentController.ts
+// Replace the createNewShipment function with this
+
+import { Request, Response } from 'express';
+import { Shipment } from '../models/Shipment';
+import { Package } from '../models/Package';
+import { shippoService } from '../services/shippoService';
+import mongoose from 'mongoose';
+
+/**
+ * Format country name to ISO 2-letter code
+ */
+function formatCountryCode(country: string): string {
+  const countryMap: Record<string, string> = {
+    Morocco: 'MA',
+    'United States': 'US',
+    USA: 'US',
+    'United Kingdom': 'GB',
+    UK: 'GB',
+    France: 'FR',
+    Germany: 'DE',
+    Spain: 'ES',
+    Italy: 'IT',
+    Canada: 'CA',
+    China: 'CN',
+    Japan: 'JP',
+    'South Korea': 'KR',
+    Australia: 'AU',
+    Brazil: 'BR',
+    India: 'IN',
+    Mexico: 'MX',
+  };
+
+  // If already 2-letter code, return as-is
+  if (country.length === 2) {
+    return country.toUpperCase();
+  }
+
+  // Look up in map
+  const code = countryMap[country];
+  if (code) {
+    return code;
+  }
+
+  // Fallback
+  console.warn(`⚠️ Unknown country: "${country}", using as-is`);
+  return country;
+}
+
+/**
+ * Format phone number to international format
+ */
+function formatPhoneNumber(phone: string): string {
+  // Remove all non-numeric characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+
+  // If doesn't start with +, try to add country code
+  if (!cleaned.startsWith('+')) {
+    if (cleaned.startsWith('212')) {
+      cleaned = '+' + cleaned;
+    } else if (cleaned.startsWith('6') || cleaned.startsWith('7')) {
+      cleaned = '+212' + cleaned;
+    } else if (cleaned.length === 10) {
+      cleaned = '+1' + cleaned;
+    } else {
+      cleaned = '+' + cleaned;
+    }
+  }
+
+  return cleaned;
+}
+
 /**
  * Create a new shipment
- * POST /api/shipments
  */
-export const createNewShipment = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export async function createNewShipment(req: Request, res: Response) {
   try {
-    if (!req.user) {
-      sendForbidden(res, 'Authentication required');
-      return;
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const {
-      packageIds,
-      destination,
-      carrier,
-      serviceLevel,
-      rateObjectId,
-      insurance,
-      customsInfo,
-      cost,
-      payment,
-      notes,
-    } = req.body;
+    console.log('🚚 Creating shipment for user:', userId);
 
-    // Validate required fields
-    if (!packageIds || packageIds.length === 0) {
-      sendError(res, 'At least one package is required', 400);
-      return;
+    const requestData = req.body;
+    console.log('📦 Package IDs:', requestData.packageIds);
+
+    // ✅ VALIDATE required fields from frontend
+    if (!requestData.packageIds || requestData.packageIds.length === 0) {
+      return res
+        .status(400)
+        .json({ error: 'At least one package is required' });
     }
 
-    if (!destination) {
-      sendError(res, 'Destination information is required', 400);
-      return;
+    if (!requestData.destination) {
+      return res.status(400).json({ error: 'Destination address is required' });
     }
 
-    if (!rateObjectId) {
-      sendError(res, 'Rate object ID is required for shipment creation', 400);
-      return;
-    }
-
-    if (!payment) {
-      sendError(res, 'Payment information is required', 400);
-      return;
-    }
-
-    console.log('🚚 Creating shipment for user:', req.user.userId);
-    console.log('📦 Package IDs:', packageIds);
-
-    // 1. Verify packages belong to user and are in 'received' status
-    const packages = await Package.find({
-      _id: { $in: packageIds },
-      userId: req.user.userId,
-    });
-
-    if (packages.length !== packageIds.length) {
-      sendError(res, 'Some packages not found or do not belong to you', 404);
-      return;
-    }
-
-    // Check all packages are in received status
-    const invalidPackages = packages.filter((pkg) => pkg.status !== 'received');
-    if (invalidPackages.length > 0) {
-      sendError(
-        res,
-        `Cannot ship packages that are not in storage. ${invalidPackages.length} package(s) have invalid status.`,
-        400
-      );
-      return;
-    }
-
-    // 2. Calculate total weight and dimensions
-    const totalWeight = packages.reduce(
-      (sum, pkg) => sum + (pkg.weight?.value || 0),
-      0
+    // 🔍 LOG: Check if we have rate object ID
+    console.log(
+      '🌐 Creating Shippo shipment with rate:',
+      requestData.rateObjectId
     );
 
-    const maxLength = Math.max(
-      ...packages.map((pkg) => pkg.dimensions?.length || 0)
-    );
-    const maxWidth = Math.max(
-      ...packages.map((pkg) => pkg.dimensions?.width || 0)
-    );
-    const totalHeight = packages.reduce(
-      (sum, pkg) => sum + (pkg.dimensions?.height || 0),
-      0
-    );
-
-    // 3. Check for unpaid photo requests
-    const unpaidPhotoRequests = await PhotoRequest.find({
-      packageId: { $in: packageIds },
-      'billing.charged': false,
-    });
-
-    const photoRequestFee = unpaidPhotoRequests.length * 2; // $2 per photo request
-
-    // 4. Check for consolidation with extra protection
-    let protectionFee = 0;
-    if (packages[0].consolidationId) {
-      const consolidation = await Consolidation.findById(
-        packages[0].consolidationId
-      );
-      if (consolidation?.preferences.addProtection) {
-        protectionFee = 2; // $2 for extra protection
-      }
+    if (!requestData.rateObjectId) {
+      return res.status(400).json({ error: 'Rate object ID is required' });
     }
 
-    console.log('💰 Fees:', {
-      shipping: cost.shipping,
-      photoRequests: photoRequestFee,
-      protection: protectionFee,
-      insurance: cost.insurance || 0,
-    });
+    // ======================================
+    // 🔥 FORMAT DATA FOR SHIPPO API
+    // ======================================
 
-    // 5. Calculate total declared value
-    const declaredValue = packages.reduce(
-      (sum, pkg) => sum + (pkg.estimatedValue?.amount || 0),
-      0
-    );
-
-    // 6. Create shipment via Shippo (purchase label)
-    console.log('🌐 Creating Shippo shipment with rate:', rateObjectId);
-
-    // Build shipment data for Shippo
-    const shippoShipmentData = {
-      userId: req.user.userId,
-      packageIds,
-      carrier,
-      serviceLevel,
-      destination,
-      weight: { total: totalWeight, unit: 'kg' as const },
-      dimensions: {
-        length: maxLength,
-        width: maxWidth,
-        height: totalHeight,
-        unit: 'cm' as const,
-      },
-      cost: {
-        shipping: cost.shipping,
-        insurance: cost.insurance || 0,
-        total: cost.total + photoRequestFee + protectionFee,
-        currency: cost.currency || 'USD',
-      },
-      insurance: insurance || { coverage: 0, cost: 0 },
-      customsInfo: customsInfo || [],
-      notes: notes || '',
+    // 1. Format destination address
+    const addressTo = {
+      name: requestData.destination.fullName,
+      street1: requestData.destination.street,
+      street2: '',
+      city: requestData.destination.city,
+      state: requestData.destination.state || '',
+      zip: requestData.destination.postalCode || '',
+      country: formatCountryCode(requestData.destination.country),
+      phone: formatPhoneNumber(requestData.destination.phone),
+      email: requestData.destination.email || '',
     };
 
-    const shippoShipment = await shippoService.createShipment(
-      shippoShipmentData as any,
-      rateObjectId
-    );
+    console.log('📍 Formatted destination:', addressTo);
 
-    console.log('✅ Shippo shipment created:', shippoShipment.trackingNumber);
+    // 2. Format origin address (warehouse)
+    const addressFrom = {
+      name: 'Fast Shipper Warehouse',
+      street1: '123 Warehouse St',
+      city: 'Miami',
+      state: 'FL',
+      zip: '33101',
+      country: 'US',
+      phone: '+13055551234',
+      email: 'warehouse@fastshipper.com',
+    };
 
-    // 7. Calculate estimated delivery
-    const estimatedDeliveryDate = shippoShipment.estimatedDelivery
-      ? new Date(shippoShipment.estimatedDelivery)
-      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default 7 days
-
-    // 8. Create shipment record in database (using correct schema)
-    const shipment = new Shipment({
-      userId: req.user.userId,
-      packageIds: packageIds,
-      trackingNumber: shippoShipment.trackingNumber,
-      carrier: shippoShipment.carrier,
-      serviceLevel: shippoShipment.serviceLevelName,
-      status: 'pending',
-      shippedDate: null,
-      estimatedDelivery: estimatedDeliveryDate,
-      actualDelivery: null,
-      labelUrl: shippoShipment.labelUrl,
-      trackingUrl: shippoShipment.trackingUrl,
-      destination: {
-        fullName: destination.fullName,
-        street: destination.street,
-        city: destination.city,
-        postalCode: destination.postalCode,
-        country: destination.country || 'Morocco',
-        phone: destination.phone,
-      },
-      weight: {
-        total: totalWeight,
-        unit: 'kg',
-      },
-      dimensions: {
-        length: maxLength,
-        width: maxWidth,
-        height: totalHeight,
-        unit: 'cm',
-      },
-      cost: {
-        shipping: cost.shipping,
-        insurance: cost.insurance || 0,
-        total: cost.total + photoRequestFee + protectionFee,
-        currency: cost.currency || 'USD',
-      },
-      insurance: {
-        coverage: insurance?.coverage || 0,
-        cost: cost.insurance || 0,
-      },
-      customsInfo: customsInfo || [],
-      trackingEvents: [],
-      notes: `Payment: ${payment.method} (${payment.transactionId})\n${notes || ''}`,
-    });
-
-    await shipment.save();
-
-    console.log('💾 Shipment saved to database:', shipment._id);
-
-    // 9. Update package statuses to 'shipped'
-    await Package.updateMany(
-      { _id: { $in: packageIds } },
+    // 3. Format parcels from weight/dimensions
+    const parcels = [
       {
-        $set: {
-          status: 'shipped',
-          shipmentId: shipment._id,
-        },
-      }
-    );
+        length: String(requestData.dimensions?.length || 12),
+        width: String(requestData.dimensions?.width || 10),
+        height: String(requestData.dimensions?.height || 8),
+        distance_unit: requestData.dimensions?.unit === 'cm' ? 'cm' : 'in',
+        weight: String(requestData.weight?.total || 2.5),
+        mass_unit: requestData.weight?.unit === 'kg' ? 'kg' : 'lb',
+      },
+    ];
 
-    console.log(`📦 Updated ${packageIds.length} packages to shipped status`);
+    console.log('📦 Formatted parcels:', parcels);
 
-    // 10. Mark photo requests as charged
-    if (unpaidPhotoRequests.length > 0) {
-      await PhotoRequest.updateMany(
-        {
-          packageId: { $in: packageIds },
-          'billing.charged': false,
-        },
-        {
-          $set: {
-            'billing.charged': true,
-            'billing.chargedAt': new Date(),
-            'billing.shipmentId': shipment._id,
-          },
-        }
-      );
+    // 4. Format customs declaration (if international)
+    let customsDeclaration = null;
+    const isInternational = addressTo.country !== 'US';
 
-      console.log(
-        `📸 Marked ${unpaidPhotoRequests.length} photo requests as charged`
-      );
+    if (
+      isInternational &&
+      requestData.customsInfo &&
+      requestData.customsInfo.length > 0
+    ) {
+      customsDeclaration = {
+        contents_type: 'MERCHANDISE',
+        contents_explanation: 'Personal items',
+        non_delivery_option: 'RETURN',
+        certify: true,
+        certify_signer: addressTo.name,
+        items: requestData.customsInfo.map((item: any) => ({
+          description: item.description,
+          quantity: item.quantity,
+          net_weight: String(item.weight || 0.5),
+          mass_unit: 'kg',
+          value_amount: String(item.value),
+          value_currency: 'USD',
+          origin_country: item.countryOfOrigin || 'US',
+          tariff_number: item.hsCode || '',
+        })),
+      };
+
+      console.log('📋 Formatted customs:', customsDeclaration);
     }
 
-    // 11. Create transaction record
-    const transaction = await createTransaction({
-      userId: req.user.userId,
-      type: 'shipping',
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-      status: 'completed',
-      amount: {
-        value: shipment.cost.total,
-        currency: cost.currency || 'USD',
-      },
-      paymentMethod: payment.method,
-      description: `Shipping for ${packageIds.length} package(s) to ${destination.city}, ${destination.country}`,
+    // 5. Build Shippo transaction data
+    const shippoData: any = {
+      address_from: addressFrom,
+      address_to: addressTo,
+      parcels: parcels,
+      rate: requestData.rateObjectId, // ✅ Use the rate object ID
       metadata: {
-        trackingNumber: shippoShipment.trackingNumber,
-        carrier: shippoShipment.carrier,
-        packageCount: packageIds.length,
-        photoRequestFees: photoRequestFee,
-        protectionFee: protectionFee,
-        transactionId: payment.transactionId,
+        userId: userId,
+        packageIds: requestData.packageIds.join(','),
+        carrier: requestData.carrier,
+        serviceLevel: requestData.serviceLevel,
       },
-      completedAt: new Date(),
-    } as any);
+    };
 
-    console.log('💳 Transaction created:', transaction._id);
+    // Add customs if international
+    if (customsDeclaration) {
+      shippoData.customs_declaration = customsDeclaration;
+    }
 
-    // 12. Create notification for user
-    await createNotification({
-      userId: req.user.userId,
-      type: 'shipment_update',
-      title: 'Shipment Created Successfully',
-      message: `Your ${packageIds.length} package(s) have been shipped via ${shippoShipment.carrier}. Tracking number: ${shippoShipment.trackingNumber}`,
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-      priority: 'normal',
-      actionUrl: `/shipments/${shipment._id}`,
-    } as any);
+    // Add insurance if enabled
+    if (requestData.insurance?.enabled && requestData.insurance.coverage > 0) {
+      shippoData.insurance_amount = String(requestData.insurance.coverage);
+      shippoData.insurance_currency = 'USD';
+    }
 
-    console.log('✅ Shipment creation complete!');
+    console.log('✅ Final Shippo data ready');
 
-    // Return response
-    sendSuccess(
-      res,
-      {
-        shipment: {
-          id: shipment._id,
-          trackingNumber: shippoShipment.trackingNumber,
-          carrier: shippoShipment.carrier,
-          status: shipment.status,
-          estimatedDelivery: shipment.estimatedDelivery,
-          labelUrl: shippoShipment.labelUrl,
-          trackingUrl: shippoShipment.trackingUrl,
-        },
-        tracking: {
-          number: shippoShipment.trackingNumber,
-          url: shippoShipment.trackingUrl,
-          carrier: shippoShipment.carrier,
-        },
-        label: {
-          url: shippoShipment.labelUrl,
-        },
-        cost: {
-          shipping: cost.shipping,
-          insurance: cost.insurance || 0,
-          photoRequests: photoRequestFee,
-          protection: protectionFee,
-          total: shipment.cost.total,
-          currency: cost.currency || 'USD',
-        },
-      },
-      'Shipment created successfully',
-      201
+    // ======================================
+    // 🚀 CREATE SHIPPO SHIPMENT
+    // ======================================
+
+    const shippoShipment = await shippoService.createShipment(shippoData);
+
+    console.log('✅ Shippo shipment created:', {
+      objectId: shippoShipment.object_id,
+      trackingNumber: shippoShipment.tracking_number,
+      status: shippoShipment.status,
+    });
+
+    // ======================================
+    // 💾 SAVE TO DATABASE
+    // ======================================
+
+    // Update packages status
+    await Package.updateMany(
+      { _id: { $in: requestData.packageIds } },
+      { status: 'shipped' }
     );
+
+    // Create shipment record
+    const newShipment = await Shipment.create({
+      userId,
+      packageIds: requestData.packageIds,
+      trackingNumber: shippoShipment.tracking_number || 'PENDING',
+      carrier: requestData.carrier,
+      serviceLevel: requestData.serviceLevel,
+      destination: requestData.destination,
+      status: shippoShipment.status === 'SUCCESS' ? 'in_transit' : 'pending',
+      cost: requestData.cost,
+      labelUrl: shippoShipment.label_url,
+      trackingUrl: shippoShipment.tracking_url_provider,
+      shippoTransactionId: shippoShipment.object_id,
+      estimatedDelivery: shippoShipment.eta,
+      shippedDate: new Date(),
+      insurance: requestData.insurance,
+      customsInfo: requestData.customsInfo,
+      weight: requestData.weight,
+      dimensions: requestData.dimensions,
+      notes: requestData.notes,
+    });
+
+    console.log('✅ Shipment saved to database:', newShipment._id);
+
+    // ======================================
+    // 📤 RESPOND TO FRONTEND
+    // ======================================
+
+    return res.status(201).json({
+      success: true,
+      shipment: {
+        id: newShipment._id,
+        trackingNumber: newShipment.trackingNumber,
+        labelUrl: newShipment.labelUrl,
+        trackingUrl: newShipment.trackingUrl,
+        carrier: newShipment.carrier,
+        status: newShipment.status,
+        estimatedDelivery: newShipment.estimatedDelivery,
+      },
+    });
   } catch (error: any) {
     console.error('❌ Error creating shipment:', error);
-    sendError(res, error.message || 'Failed to create shipment', 500);
+
+    return res.status(500).json({
+      error: 'Failed to create shipment',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
   }
-};
+}
 
 /**
  * Get all shipments for current user

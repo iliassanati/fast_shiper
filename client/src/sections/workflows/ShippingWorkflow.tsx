@@ -1,4 +1,4 @@
-// client/src/sections/workflows/ShippingWorkflow.tsx - FIXED with debugging
+// client/src/sections/workflows/ShippingWorkflow.tsx - COMPLETE FIX
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,6 +6,7 @@ import {
   MapPin,
   Truck,
   Shield,
+  FileText,
   DollarSign,
   CreditCard,
   ChevronRight,
@@ -15,6 +16,8 @@ import {
   AlertCircle,
   Info,
   Save,
+  Plus,
+  X,
 } from 'lucide-react';
 import { useShippingRates } from '@/hooks/useShippingRates';
 import {
@@ -33,14 +36,26 @@ interface ShippingWorkflowProps {
     photoRequests: number;
   };
   onSubmit: (shippingData: any) => void;
-  onCancel: () => void;
+  onClose: () => void;
+  submitting?: boolean;
+}
+
+// Customs item interface
+interface CustomsItem {
+  description: string;
+  quantity: number;
+  value: number;
+  weight: number;
+  hsCode: string;
+  countryOfOrigin: string;
 }
 
 export default function ShippingWorkflow({
   selectedPackages,
   consolidation,
   onSubmit,
-  onCancel,
+  onClose,
+  submitting = false,
 }: ShippingWorkflowProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const { rates, loading: ratesLoading, fetchRates } = useShippingRates();
@@ -71,25 +86,38 @@ export default function ShippingWorkflow({
   });
 
   // Step 3: Rate Selection
-  const [selectedRate, setSelectedRate] = useState<ShippingRate | null>(null);
+  const [selectedRate, setSelectedRate] = useState<any | null>(null);
 
   // Step 4: Insurance
   const [insuranceEnabled, setInsuranceEnabled] = useState(false);
   const [insuranceCoverage, setInsuranceCoverage] = useState(0);
 
+  // Step 5: Customs Declaration
+  const [customsItems, setCustomsItems] = useState<CustomsItem[]>([]);
+
   // Debug: Log selected packages on mount
   useEffect(() => {
     console.log('🔍 Selected Packages:', selectedPackages);
     console.log('📦 Number of packages:', selectedPackages?.length);
-    if (selectedPackages?.length > 0) {
-      console.log('📋 Package structure:', selectedPackages[0]);
-      console.log('⚖️ Package keys:', Object.keys(selectedPackages[0]));
+
+    // Initialize customs items from packages
+    if (selectedPackages?.length > 0 && customsItems.length === 0) {
+      const initialCustomsItems: CustomsItem[] = selectedPackages.map(
+        (pkg) => ({
+          description: pkg.description || 'Personal items',
+          quantity: 1,
+          value: getPackageValue(pkg),
+          weight: getPackageWeight(pkg),
+          hsCode: '',
+          countryOfOrigin: 'US',
+        })
+      );
+      setCustomsItems(initialCustomsItems);
     }
   }, [selectedPackages]);
 
   // Helper function to extract weight from package
   const getPackageWeight = (pkg: any): number => {
-    // Try different possible property names
     return (
       pkg.weight ||
       pkg.totalWeight ||
@@ -102,7 +130,6 @@ export default function ShippingWorkflow({
 
   // Helper function to extract value from package
   const getPackageValue = (pkg: any): number => {
-    // Try different possible property names
     return (
       pkg.value ||
       pkg.totalValue ||
@@ -125,19 +152,14 @@ export default function ShippingWorkflow({
     0
   );
 
-  // Log calculated totals
-  useEffect(() => {
-    console.log('📊 Total Weight:', totalWeight);
-    console.log('💰 Total Value:', totalValue);
-  }, [totalWeight, totalValue]);
-
   const steps = [
     { number: 1, name: 'Packages', icon: Package },
     { number: 2, name: 'Destination', icon: MapPin },
     { number: 3, name: 'Shipping', icon: Truck },
     { number: 4, name: 'Insurance', icon: Shield },
-    { number: 5, name: 'Summary', icon: DollarSign },
-    { number: 6, name: 'Payment', icon: CreditCard },
+    { number: 5, name: 'Customs', icon: FileText },
+    { number: 6, name: 'Summary', icon: DollarSign },
+    { number: 7, name: 'Payment', icon: CreditCard },
   ];
 
   // Handle saved address selection
@@ -167,6 +189,37 @@ export default function ShippingWorkflow({
       country: 'Morocco',
       phone: '',
     });
+  };
+
+  // Add new customs item
+  const addCustomsItem = () => {
+    setCustomsItems([
+      ...customsItems,
+      {
+        description: '',
+        quantity: 1,
+        value: 0,
+        weight: 0,
+        hsCode: '',
+        countryOfOrigin: 'US',
+      },
+    ]);
+  };
+
+  // Remove customs item
+  const removeCustomsItem = (index: number) => {
+    setCustomsItems(customsItems.filter((_, i) => i !== index));
+  };
+
+  // Update customs item
+  const updateCustomsItem = (
+    index: number,
+    field: keyof CustomsItem,
+    value: any
+  ) => {
+    const updated = [...customsItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setCustomsItems(updated);
   };
 
   const handleNext = async () => {
@@ -199,13 +252,24 @@ export default function ShippingWorkflow({
 
       // Fetch rates
       await fetchRates({
-        weight: totalWeight || 1, // Default to 1 if 0
+        weight: totalWeight || 1,
         dimensions: { length: 12, width: 10, height: 8 },
         destinationPostalCode: destination.postalCode,
         destinationCity: destination.city,
         destinationPhone: destination.phone,
-        declaredValue: totalValue || 100, // Default to 100 if 0
+        declaredValue: totalValue || 100,
       });
+    }
+
+    // Step 5: Validate customs declaration
+    if (currentStep === 5) {
+      const invalidItems = customsItems.filter(
+        (item) => !item.description || item.value <= 0
+      );
+      if (invalidItems.length > 0) {
+        alert('Please fill in all customs items with description and value');
+        return;
+      }
     }
 
     setCurrentStep((prev) => Math.min(prev + 1, steps.length));
@@ -228,32 +292,45 @@ export default function ShippingWorkflow({
       protection,
       photoRequests,
       total,
-      packageValue:
-        selectedPackages?.reduce(
-          (sum, pkg) => sum + (getPackageValue(pkg) || 0),
-          0
-        ) || 0,
+      currency: 'USD',
     };
   };
 
   const handlePaymentComplete = (paymentData: PaymentResult) => {
     const costs = calculateCosts();
 
+    // 🔥 CRITICAL FIX: Extract package IDs properly
+    const packageIds = selectedPackages.map((pkg) => pkg.id || pkg._id);
+
+    console.log('🔥 Package IDs extracted:', packageIds);
+
+    // 🔥 FIX: Include ALL required fields
     const shippingData = {
+      packageIds: packageIds, // ✅ Fixed: Proper array of IDs
       destination,
-      selectedRate,
+      carrier: selectedRate?.carrier, // ✅ Added
+      serviceLevel: selectedRate?.serviceLevelName, // ✅ Added
+      rateObjectId: selectedRate?.objectId, // ✅ CRITICAL: Rate object ID
       insurance: {
         enabled: insuranceEnabled,
         coverage: insuranceCoverage,
         cost: costs.insurance,
       },
-      costs,
+      customsInfo: customsItems, // ✅ Added: Customs declaration
+      cost: {
+        shipping: costs.shipping,
+        insurance: costs.insurance,
+        total: costs.total,
+        currency: costs.currency,
+      },
       payment: paymentData,
-      packages: selectedPackages,
       consolidation,
+      notes: consolidation
+        ? `Consolidation with ${consolidation.photoRequests} photo requests`
+        : '',
     };
 
-    console.log('✅ Shipping workflow complete:', shippingData);
+    console.log('✅ Complete shipping data:', shippingData);
     onSubmit(shippingData);
   };
 
@@ -267,8 +344,9 @@ export default function ShippingWorkflow({
       destination.phone,
     3: selectedRate !== null,
     4: true,
-    5: true,
-    6: false,
+    5: customsItems.every((item) => item.description && item.value > 0),
+    6: true,
+    7: false,
   };
 
   return (
@@ -339,23 +417,6 @@ export default function ShippingWorkflow({
                 </h2>
               </div>
 
-              {/* Debug Info - Remove in production */}
-              {import.meta.env.DEV && (
-                <div className='p-4 bg-yellow-50 rounded-xl border-2 border-yellow-200 mb-4'>
-                  <p className='text-xs font-mono text-yellow-900'>
-                    DEBUG: {selectedPackages?.length} packages found
-                    {selectedPackages?.length > 0 && (
-                      <>
-                        <br />
-                        Weight detected: {totalWeight} lbs
-                        <br />
-                        Value detected: ${totalValue}
-                      </>
-                    )}
-                  </p>
-                </div>
-              )}
-
               {selectedPackages?.length === 0 ? (
                 <div className='p-6 bg-red-50 rounded-xl border-2 border-red-200'>
                   <div className='flex items-start gap-3'>
@@ -387,7 +448,6 @@ export default function ShippingWorkflow({
                               <p className='font-semibold text-slate-900'>
                                 {pkg.description ||
                                   pkg.name ||
-                                  pkg.title ||
                                   `Package ${idx + 1}`}
                               </p>
                               <p className='text-sm text-slate-600'>
@@ -425,15 +485,6 @@ export default function ShippingWorkflow({
                         </p>
                       </div>
                     </div>
-
-                    {(totalWeight === 0 || totalValue === 0) && (
-                      <div className='mt-4 p-3 bg-yellow-100 rounded-lg'>
-                        <p className='text-xs text-yellow-900'>
-                          ⚠️ Missing weight or value will use default values for
-                          shipping calculation
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </>
               )}
@@ -452,7 +503,6 @@ export default function ShippingWorkflow({
                 </h2>
               </div>
 
-              {/* Saved Addresses Section */}
               {addresses.length > 0 && (
                 <SavedAddresses
                   addresses={addresses}
@@ -464,7 +514,6 @@ export default function ShippingWorkflow({
                 />
               )}
 
-              {/* New Address Form */}
               {(!useSavedAddress || addresses.length === 0) && (
                 <>
                   {addresses.length > 0 && (
@@ -552,7 +601,7 @@ export default function ShippingWorkflow({
 
                     <div>
                       <label className='block text-sm font-semibold text-slate-700 mb-2'>
-                        Phone Number * (Required for some carriers)
+                        Phone Number *
                       </label>
                       <input
                         type='tel'
@@ -568,7 +617,6 @@ export default function ShippingWorkflow({
                       />
                     </div>
 
-                    {/* Save Address Option */}
                     <div className='p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200'>
                       <label className='flex items-start gap-3 cursor-pointer'>
                         <input
@@ -584,10 +632,6 @@ export default function ShippingWorkflow({
                               Save this address for future use
                             </span>
                           </div>
-                          <p className='text-sm text-purple-700'>
-                            Quickly reuse this address next time you ship
-                          </p>
-
                           {saveThisAddress && (
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
@@ -604,7 +648,7 @@ export default function ShippingWorkflow({
                                   setAddressLabel(e.target.value)
                                 }
                                 className='w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:outline-none'
-                                placeholder='e.g., Home, Work, Moms House'
+                                placeholder='e.g., Home, Work'
                               />
                             </motion.div>
                           )}
@@ -616,9 +660,6 @@ export default function ShippingWorkflow({
               )}
             </div>
           )}
-
-          {/* Steps 3-6 remain the same as in the previous version */}
-          {/* I'll include them but they're unchanged */}
 
           {/* Step 3: Rate Selection */}
           {currentStep === 3 && (
@@ -681,11 +722,6 @@ export default function ShippingWorkflow({
                             <p className='text-sm text-slate-600'>
                               Estimated: {rate.estimatedDays} business days
                             </p>
-                            {rate.attributes.length > 0 && (
-                              <p className='text-xs text-slate-500 mt-1'>
-                                {rate.attributes.join(', ')}
-                              </p>
-                            )}
                           </div>
                         </div>
                         <div className='text-right'>
@@ -769,9 +805,6 @@ export default function ShippingWorkflow({
                           ${(insuranceCoverage * 0.01).toFixed(2)}
                         </span>
                       </div>
-                      <p className='text-xs text-slate-500 mt-2'>
-                        1% of coverage amount
-                      </p>
                     </div>
                   </motion.div>
                 )}
@@ -779,8 +812,205 @@ export default function ShippingWorkflow({
             </div>
           )}
 
-          {/* Step 5: Payment Summary */}
+          {/* Step 5: Customs Declaration */}
           {currentStep === 5 && (
+            <div className='space-y-6'>
+              <div className='flex items-center gap-3 mb-6'>
+                <div className='p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl'>
+                  <FileText className='w-6 h-6 text-white' />
+                </div>
+                <h2 className='text-2xl font-bold text-slate-900'>
+                  Customs Declaration
+                </h2>
+              </div>
+
+              <div className='p-6 bg-blue-50 rounded-xl border-2 border-blue-200'>
+                <div className='flex items-start gap-3'>
+                  <Info className='w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5' />
+                  <p className='text-sm text-blue-900'>
+                    Declare all items for customs clearance. Accurate
+                    information helps avoid delays and ensures proper tax
+                    calculation.
+                  </p>
+                </div>
+              </div>
+
+              <div className='space-y-4'>
+                {customsItems.map((item, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className='p-4 bg-slate-50 rounded-xl border-2 border-slate-200'
+                  >
+                    <div className='flex items-start justify-between mb-4'>
+                      <h4 className='font-semibold text-slate-900'>
+                        Item {index + 1}
+                      </h4>
+                      {customsItems.length > 1 && (
+                        <button
+                          onClick={() => removeCustomsItem(index)}
+                          className='p-1 text-red-600 hover:bg-red-50 rounded-lg'
+                        >
+                          <X className='w-4 h-4' />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className='grid grid-cols-2 gap-3'>
+                      <div className='col-span-2'>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          Description *
+                        </label>
+                        <input
+                          type='text'
+                          value={item.description}
+                          onChange={(e) =>
+                            updateCustomsItem(
+                              index,
+                              'description',
+                              e.target.value
+                            )
+                          }
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                          placeholder='e.g., Cotton T-shirt'
+                        />
+                      </div>
+
+                      <div>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          Quantity *
+                        </label>
+                        <input
+                          type='number'
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updateCustomsItem(
+                              index,
+                              'quantity',
+                              Number(e.target.value)
+                            )
+                          }
+                          min={1}
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                        />
+                      </div>
+
+                      <div>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          Value (USD) *
+                        </label>
+                        <input
+                          type='number'
+                          value={item.value}
+                          onChange={(e) =>
+                            updateCustomsItem(
+                              index,
+                              'value',
+                              Number(e.target.value)
+                            )
+                          }
+                          min={0}
+                          step={0.01}
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                        />
+                      </div>
+
+                      <div>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          Weight (kg)
+                        </label>
+                        <input
+                          type='number'
+                          value={item.weight}
+                          onChange={(e) =>
+                            updateCustomsItem(
+                              index,
+                              'weight',
+                              Number(e.target.value)
+                            )
+                          }
+                          min={0}
+                          step={0.1}
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                        />
+                      </div>
+
+                      <div>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          HS Code (Optional)
+                        </label>
+                        <input
+                          type='text'
+                          value={item.hsCode}
+                          onChange={(e) =>
+                            updateCustomsItem(index, 'hsCode', e.target.value)
+                          }
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                          placeholder='e.g., 6109.10'
+                        />
+                      </div>
+
+                      <div className='col-span-2'>
+                        <label className='block text-xs font-semibold text-slate-700 mb-1'>
+                          Country of Origin
+                        </label>
+                        <select
+                          value={item.countryOfOrigin}
+                          onChange={(e) =>
+                            updateCustomsItem(
+                              index,
+                              'countryOfOrigin',
+                              e.target.value
+                            )
+                          }
+                          className='w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm'
+                        >
+                          <option value='US'>United States</option>
+                          <option value='CN'>China</option>
+                          <option value='GB'>United Kingdom</option>
+                          <option value='DE'>Germany</option>
+                          <option value='FR'>France</option>
+                          <option value='IT'>Italy</option>
+                          <option value='JP'>Japan</option>
+                          <option value='KR'>South Korea</option>
+                        </select>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+
+                <button
+                  onClick={addCustomsItem}
+                  className='w-full px-4 py-3 border-2 border-blue-300 border-dashed rounded-xl text-blue-600 font-semibold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2'
+                >
+                  <Plus className='w-5 h-5' />
+                  Add Another Item
+                </button>
+              </div>
+
+              {/* Total Declared Value */}
+              <div className='p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200'>
+                <div className='flex items-center justify-between'>
+                  <span className='text-lg font-semibold text-slate-900'>
+                    Total Declared Value:
+                  </span>
+                  <span className='text-2xl font-bold text-green-600'>
+                    $
+                    {customsItems
+                      .reduce(
+                        (sum, item) => sum + item.value * item.quantity,
+                        0
+                      )
+                      .toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: Payment Summary */}
+          {currentStep === 6 && (
             <div className='space-y-6'>
               <div className='flex items-center gap-3 mb-6'>
                 <div className='p-3 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl'>
@@ -791,7 +1021,6 @@ export default function ShippingWorkflow({
                 </h2>
               </div>
 
-              {/* Cost Breakdown */}
               <div className='space-y-3'>
                 <div className='p-4 bg-slate-50 rounded-xl border-2 border-slate-200'>
                   <div className='flex items-center justify-between mb-2'>
@@ -830,22 +1059,8 @@ export default function ShippingWorkflow({
                     </div>
                   </div>
                 )}
-
-                {costs.photoRequests > 0 && (
-                  <div className='p-4 bg-blue-50 rounded-xl border-2 border-blue-200'>
-                    <div className='flex items-center justify-between'>
-                      <span className='text-blue-700'>
-                        Photo Requests ({consolidation?.photoRequests})
-                      </span>
-                      <span className='font-bold text-blue-900'>
-                        ${costs.photoRequests.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Total */}
               <div className='p-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl text-white'>
                 <div className='flex items-center justify-between'>
                   <span className='text-lg font-semibold'>Total Amount</span>
@@ -853,25 +1068,6 @@ export default function ShippingWorkflow({
                     ${costs.total.toFixed(2)}
                   </span>
                 </div>
-              </div>
-
-              {/* What's Included */}
-              <div className='p-4 bg-slate-50 rounded-xl border-2 border-slate-200'>
-                <h3 className='font-semibold text-slate-900 mb-2'>
-                  What's Included:
-                </h3>
-                <ul className='space-y-1 text-sm text-slate-600'>
-                  <li>✓ Package handling and consolidation</li>
-                  <li>✓ Secure shipping to Morocco</li>
-                  <li>✓ Basic $100 insurance coverage</li>
-                  <li>✓ Tracking number</li>
-                  {consolidation?.hasExtraProtection && (
-                    <li>✓ Extra protection packaging</li>
-                  )}
-                  {consolidation?.photoRequests > 0 && (
-                    <li>✓ Photo documentation before shipping</li>
-                  )}
-                </ul>
               </div>
 
               {/* Shipping Details */}
@@ -884,27 +1080,21 @@ export default function ShippingWorkflow({
                     <strong>To:</strong> {destination.fullName}
                   </p>
                   <p>
-                    {destination.street}, {destination.city}{' '}
-                    {destination.postalCode}
+                    {destination.street}, {destination.city}
                   </p>
-                  <p>{destination.country}</p>
                   <p>
                     <strong>Carrier:</strong> {selectedRate?.carrier}
                   </p>
                   <p>
                     <strong>Service:</strong> {selectedRate?.serviceLevelName}
                   </p>
-                  <p>
-                    <strong>Estimated Delivery:</strong>{' '}
-                    {selectedRate?.estimatedDays} business days
-                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 6: Payment */}
-          {currentStep === 6 && (
+          {/* Step 7: Payment */}
+          {currentStep === 7 && (
             <div className='space-y-6'>
               <div className='flex items-center gap-3 mb-6'>
                 <div className='p-3 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl'>
@@ -918,12 +1108,13 @@ export default function ShippingWorkflow({
                 currency='USD'
                 onPaymentComplete={handlePaymentComplete}
                 onCancel={handleBack}
+                loading={submitting}
               />
             </div>
           )}
 
           {/* Navigation Buttons */}
-          {currentStep < 6 && (
+          {currentStep < 7 && (
             <div className='flex items-center gap-4 mt-8'>
               {currentStep > 1 && (
                 <button
@@ -955,7 +1146,7 @@ export default function ShippingWorkflow({
           {/* Cancel Button */}
           {currentStep === 1 && (
             <button
-              onClick={onCancel}
+              onClick={onClose}
               className='w-full px-6 py-3 border-2 border-slate-300 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition-colors mt-4'
             >
               Cancel Shipping

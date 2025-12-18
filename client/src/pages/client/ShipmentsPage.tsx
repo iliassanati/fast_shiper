@@ -1,4 +1,4 @@
-// src/pages/client/ShipmentsPage.tsx
+// client/src/pages/client/ShipmentsPage.tsx - FIXED WITH DATA FETCHING
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useNotificationStore, useShipmentStore } from '@/stores';
 import type { ShipmentStatus } from '@/types/client.types';
@@ -10,17 +10,18 @@ import {
   Filter,
   MapPin,
   Package,
+  RefreshCw,
   Search,
   Truck,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function ShipmentsPage() {
   const navigate = useNavigate();
-  const { shipments } = useShipmentStore();
-  const { addNotification } = useNotificationStore();
+  const { shipments, loading, fetchShipments } = useShipmentStore();
+  const { showToast } = useNotificationStore();
 
   // Local state
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,39 +30,70 @@ export default function ShipmentsPage() {
   );
   const [sortBy, setSortBy] = useState<'date' | 'cost'>('date');
   const [showFilters, setShowFilters] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Status filter options
+  // 🔥 FIX: Fetch shipments on mount
+  useEffect(() => {
+    const loadShipments = async () => {
+      try {
+        console.log('📦 Loading shipments...');
+        await fetchShipments({ limit: 100 });
+      } catch (error) {
+        console.error('❌ Error loading shipments:', error);
+        showToast('Failed to load shipments', 'error');
+      }
+    };
+
+    loadShipments();
+  }, [fetchShipments, showToast]);
+
+  // 🔥 FIX: Manual refresh handler
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchShipments({ limit: 100 });
+      showToast('Shipments refreshed', 'success');
+    } catch (error) {
+      showToast('Failed to refresh shipments', 'error');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Status filter options with counts
   const statusOptions: Array<{
     label: string;
     value: ShipmentStatus | 'all';
     count: number;
     color: string;
-  }> = [
-    {
-      label: 'All Shipments',
-      value: 'all',
-      count: shipments.length,
-      color: 'blue',
-    },
-    {
-      label: 'In Transit',
-      value: 'in_transit',
-      count: shipments.filter((s) => s.status === 'in_transit').length,
-      color: 'blue',
-    },
-    {
-      label: 'Delivered',
-      value: 'delivered',
-      count: shipments.filter((s) => s.status === 'delivered').length,
-      color: 'green',
-    },
-    {
-      label: 'Pending',
-      value: 'pending',
-      count: shipments.filter((s) => s.status === 'pending').length,
-      color: 'yellow',
-    },
-  ];
+  }> = useMemo(() => {
+    return [
+      {
+        label: 'All Shipments',
+        value: 'all',
+        count: shipments.length,
+        color: 'blue',
+      },
+      {
+        label: 'In Transit',
+        value: 'in_transit',
+        count: shipments.filter((s) => s.status === 'in_transit').length,
+        color: 'blue',
+      },
+      {
+        label: 'Delivered',
+        value: 'delivered',
+        count: shipments.filter((s) => s.status === 'delivered').length,
+        color: 'green',
+      },
+      {
+        label: 'Pending',
+        value: 'pending',
+        count: shipments.filter((s) => s.status === 'pending').length,
+        color: 'yellow',
+      },
+    ];
+  }, [shipments]);
 
   // Filtered and sorted shipments
   const filteredShipments = useMemo(() => {
@@ -89,8 +121,8 @@ export default function ShipmentsPage() {
       switch (sortBy) {
         case 'date':
           return (
-            new Date(b.shippedDate).getTime() -
-            new Date(a.shippedDate).getTime()
+            new Date(b.shippedDate || b.estimatedDelivery).getTime() -
+            new Date(a.shippedDate || a.estimatedDelivery).getTime()
           );
         case 'cost':
           return (
@@ -134,19 +166,40 @@ export default function ShipmentsPage() {
   };
 
   // Quick actions
-  const handleTrackShipment = (trackingNumber: string) => {
-    addNotification(`Opening tracking for ${trackingNumber}`, 'info');
-    // In production, this would open carrier's tracking page
-    window.open(
-      `https://www.dhl.com/tracking?tracking-id=${trackingNumber}`,
-      '_blank'
-    );
+  const handleTrackShipment = (trackingNumber: string, carrier: string) => {
+    // Carrier tracking URLs
+    const trackingUrls: Record<string, string> = {
+      DHL: `https://www.dhl.com/tracking?tracking-id=${trackingNumber}`,
+      FedEx: `https://www.fedex.com/fedextrack/?trknbr=${trackingNumber}`,
+      UPS: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+      Aramex: `https://www.aramex.com/track/results?q=${trackingNumber}`,
+    };
+
+    const url =
+      trackingUrls[carrier] ||
+      `https://www.google.com/search?q=${trackingNumber}`;
+    window.open(url, '_blank');
+    showToast(`Opening ${carrier} tracking`, 'info');
   };
 
   const handleDownloadInvoice = (shipmentId: string) => {
-    addNotification('Downloading invoice...', 'success');
+    showToast('Invoice download coming soon', 'info');
     // In production, this would download actual invoice
   };
+
+  // Show loading state
+  if (loading && shipments.length === 0) {
+    return (
+      <DashboardLayout activeSection='shipments'>
+        <div className='flex items-center justify-center min-h-[400px]'>
+          <div className='text-center'>
+            <div className='w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4' />
+            <p className='text-slate-600'>Loading shipments...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout activeSection='shipments'>
@@ -157,22 +210,44 @@ export default function ShipmentsPage() {
             <h1 className='text-3xl font-bold text-slate-900'>My Shipments</h1>
             <p className='text-slate-600'>
               {filteredShipments.length} of {shipments.length} shipments
+              {filterStatus !== 'all' && ` (filtered by ${filterStatus})`}
             </p>
           </div>
 
-          {/* Quick Stats */}
+          {/* Quick Actions */}
           <div className='flex gap-3'>
-            <div className='px-4 py-2 bg-blue-50 rounded-lg border border-blue-200'>
-              <p className='text-xs text-blue-600 font-semibold'>In Transit</p>
-              <p className='text-2xl font-bold text-blue-700'>
-                {shipments.filter((s) => s.status === 'in_transit').length}
-              </p>
-            </div>
-            <div className='px-4 py-2 bg-green-50 rounded-lg border border-green-200'>
-              <p className='text-xs text-green-600 font-semibold'>Delivered</p>
-              <p className='text-2xl font-bold text-green-700'>
-                {shipments.filter((s) => s.status === 'delivered').length}
-              </p>
+            {/* Refresh Button */}
+            <motion.button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className='px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold flex items-center gap-2 hover:bg-slate-200 disabled:opacity-50'
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+              />
+              Refresh
+            </motion.button>
+
+            {/* Quick Stats */}
+            <div className='flex gap-3'>
+              <div className='px-4 py-2 bg-blue-50 rounded-lg border border-blue-200'>
+                <p className='text-xs text-blue-600 font-semibold'>
+                  In Transit
+                </p>
+                <p className='text-2xl font-bold text-blue-700'>
+                  {shipments.filter((s) => s.status === 'in_transit').length}
+                </p>
+              </div>
+              <div className='px-4 py-2 bg-green-50 rounded-lg border border-green-200'>
+                <p className='text-xs text-green-600 font-semibold'>
+                  Delivered
+                </p>
+                <p className='text-2xl font-bold text-green-700'>
+                  {shipments.filter((s) => s.status === 'delivered').length}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -346,7 +421,7 @@ export default function ShipmentsPage() {
                     <div>
                       <p className='text-xs text-slate-500 mb-1'>Shipped</p>
                       <p className='font-semibold text-slate-900'>
-                        {shipment.shippedDate}
+                        {shipment.shippedDate || 'Pending'}
                       </p>
                     </div>
 
@@ -388,7 +463,10 @@ export default function ShipmentsPage() {
                     <motion.button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleTrackShipment(shipment.trackingNumber);
+                        handleTrackShipment(
+                          shipment.trackingNumber,
+                          shipment.carrier
+                        );
                       }}
                       className='px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center gap-2 text-sm'
                       whileHover={{ scale: 1.05 }}
