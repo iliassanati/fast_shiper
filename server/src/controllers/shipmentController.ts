@@ -1,18 +1,16 @@
 // server/src/controllers/shipmentController.ts - FIXED VERSION
-import type { Response, NextFunction } from 'express';
-import type { AuthRequest } from '../types/index.js';
-import { Shipment } from '../models/Shipment.js';
-import { Package } from '../models/Package.js';
-import { PhotoRequest } from '../models/PhotoRequest.js';
-import { Consolidation } from '../models/Consolidation.js';
+import type { NextFunction, Response } from 'express';
 import { createNotification } from '../models/Notification.js';
+import { Package } from '../models/Package.js';
+import { Shipment } from '../models/Shipment.js';
 import { createTransaction } from '../models/Transaction.js';
 import { shippoService } from '../services/shippoService.js';
+import type { AuthRequest } from '../types/index.js';
 import {
-  sendSuccess,
   sendError,
-  sendNotFound,
   sendForbidden,
+  sendNotFound,
+  sendSuccess,
 } from '../utils/responses.js';
 
 /**
@@ -155,12 +153,6 @@ export const getShippingRates = async (
 // 🔧 COMPLETE FIX for server/src/controllers/shipmentController.ts
 // Replace the createNewShipment function with this
 
-import { Request, Response } from 'express';
-import { Shipment } from '../models/Shipment';
-import { Package } from '../models/Package';
-import { shippoService } from '../services/shippoService';
-import mongoose from 'mongoose';
-
 /**
  * Format country name to ISO 2-letter code
  */
@@ -205,23 +197,27 @@ function formatCountryCode(country: string): string {
  * Format phone number to international format
  */
 function formatPhoneNumber(phone: string): string {
-  // Remove all non-numeric characters except +
   let cleaned = phone.replace(/[^\d+]/g, '');
 
-  // If doesn't start with +, try to add country code
-  if (!cleaned.startsWith('+')) {
-    if (cleaned.startsWith('212')) {
-      cleaned = '+' + cleaned;
-    } else if (cleaned.startsWith('6') || cleaned.startsWith('7')) {
-      cleaned = '+212' + cleaned;
-    } else if (cleaned.length === 10) {
-      cleaned = '+1' + cleaned;
-    } else {
-      cleaned = '+' + cleaned;
-    }
+  if (cleaned.startsWith('+')) return cleaned;
+
+  // Morocco numbers
+  if (cleaned.startsWith('0')) {
+    return '+212' + cleaned.substring(1);
+  }
+  if (cleaned.startsWith('212')) {
+    return '+' + cleaned;
+  }
+  if (cleaned.startsWith('6') || cleaned.startsWith('7')) {
+    return '+212' + cleaned;
   }
 
-  return cleaned;
+  // Assume Morocco if 9-10 digits
+  if (cleaned.length >= 9 && cleaned.length <= 10) {
+    return '+212' + cleaned;
+  }
+
+  return '+' + cleaned;
 }
 
 /**
@@ -266,7 +262,7 @@ export async function createNewShipment(req: AuthRequest, res: Response) {
       state: requestData.destination.state || '',
       zip: requestData.destination.postalCode || '',
       country: 'MA',
-      phone: requestData.destination.phone,
+      phone: formatPhoneNumber(requestData.destination.phone),
       email: requestData.destination.email || '',
       validate: false,
     };
@@ -287,6 +283,25 @@ export async function createNewShipment(req: AuthRequest, res: Response) {
     const packages = await Package.find({
       _id: { $in: requestData.packageIds },
     });
+
+    // Verify all packages found
+    if (packages.length !== requestData.packageIds.length) {
+      return res.status(403).json({
+        error:
+          'You do not own all selected packages or some packages not found',
+      });
+    }
+
+    // Verify all packages are shippable
+    const unshippablePackages = packages.filter(
+      (pkg) => pkg.status !== 'received' && pkg.status !== 'consolidated'
+    );
+
+    if (unshippablePackages.length > 0) {
+      return res.status(400).json({
+        error: `Cannot ship packages with status: ${unshippablePackages.map((p) => p.status).join(', ')}`,
+      });
+    }
 
     let totalWeight = packages.reduce(
       (sum, pkg) => sum + (pkg.weight?.value || 0),
@@ -347,9 +362,13 @@ export async function createNewShipment(req: AuthRequest, res: Response) {
       parcels: parcels,
       rate: requestData.rateObjectId,
       metaData: {
-        user_id: userId.substring(0, 24), // Truncate if needed
+        userId: userId.substring(0, 50), // Truncate if needed
         pkg_count: String(requestData.packageIds.length), // Just the count, not IDs
-        carrier: requestData.carrier.substring(0, 10), // Shorten carrier name}
+        carrier: requestData.carrier, // Shorten carrier name}
+        photoRequestFees: String(requestData.cost?.photoRequests || 0), // ✅ Add
+        protectionFee: String(requestData.cost?.protection || 0), // ✅ Add
+        insuranceFee: String(requestData.insurance?.cost || 0), // ✅ Add
+        totalCharged: String(requestData.cost?.total || 0), // ✅ Add
         // metadata: {
         //   userId: userId,
         //   packageIds: requestData.packageIds.join(','),
@@ -394,7 +413,7 @@ export async function createNewShipment(req: AuthRequest, res: Response) {
     // Create shipment record
     // Create shipment record
     const newShipment = await Shipment.create({
-      user: userId,
+      userId: userId,
       packages: requestData.packageIds,
       trackingNumber: shippoShipment.tracking_number || 'PENDING',
       carrier: requestData.carrier,
@@ -434,6 +453,20 @@ export async function createNewShipment(req: AuthRequest, res: Response) {
     // ======================================
     // 💰 CREATE TRANSACTION RECORD
     // ======================================
+
+    const validPaymentMethods = [
+      'stripe',
+      'paypal',
+      'card',
+      'bank_transfer',
+      'cash_on_delivery',
+    ];
+    if (
+      requestData.payment?.paymentMethod &&
+      !validPaymentMethods.includes(requestData.payment.paymentMethod)
+    ) {
+      return res.status(400).json({ error: 'Invalid payment method' });
+    }
 
     // 🔥 NEW: Create transaction for admin tracking
     await createTransaction({
@@ -507,7 +540,7 @@ export const getShipments = async (
 
     const { status, page = 1, limit = 20 } = req.query;
     const query: any = {
-      user: req.user.userId,
+      userId: req.user.userId,
     };
 
     if (status) {
@@ -545,6 +578,8 @@ export const getShipments = async (
       destination: s.recipientInfo?.city || 'Unknown',
       packages: Array.isArray(s.packages) ? s.packages.length : 0,
       cost: `$${s.totalCost || 0} USD`,
+      trackingUrl: s.trackingUrl, // ✅ Add this
+      labelUrl: s.labelUrl, // ✅ Add this too
     }));
 
     sendSuccess(res, {
@@ -584,7 +619,7 @@ export const getShipmentById = async (
     // Query using correct field name 'user' (not 'userId')
     const shipment = await Shipment.findOne({
       _id: id,
-      user: req.user.userId,
+      userId: req.user.userId,
     })
       .populate('packages')
       .lean();

@@ -43,7 +43,7 @@ export interface IShipment extends Document {
 
 const ShipmentSchema = new Schema<IShipment>(
   {
-    user: {
+    userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,

@@ -57,6 +57,26 @@ export function useSavedAddresses() {
   const addAddress = (
     addressData: Omit<SavedAddress, 'id' | 'createdAt' | 'updatedAt'>
   ): SavedAddress => {
+    const requiredFields = [
+      'label',
+      'fullName',
+      'street',
+      'city',
+      'country',
+      'phone',
+    ];
+    const missingFields = requiredFields.filter(
+      (field) => !addressData[field]?.trim()
+    );
+
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+    }
+
+    // ✅ Validate phone format
+    if (!/^\+?[\d\s-()]+$/.test(addressData.phone)) {
+      throw new Error('Invalid phone number format');
+    }
     const newAddress: SavedAddress = {
       ...addressData,
       id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

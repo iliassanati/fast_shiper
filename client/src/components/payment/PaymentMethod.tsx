@@ -1,15 +1,21 @@
 // client/src/components/payment/PaymentMethod.tsx
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CreditCard, Check, Lock, AlertCircle, Loader2 } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, Check, CreditCard, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import StripePayment from './StripePayment';
 
 // Initialize Stripe
-const stripePromise = loadStripe(
-  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
-);
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+
+if (!STRIPE_KEY) {
+  console.error(
+    '❌ VITE_STRIPE_PUBLISHABLE_KEY not set in environment variables'
+  );
+}
+
+const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 interface PaymentMethodProps {
   totalAmount: number;
@@ -136,6 +142,14 @@ export default function PaymentMethod({
               </p>
             </div>
           </div>
+        </div>
+      )}
+      {!stripePromise && (
+        <div className='p-4 bg-red-50 border-2 border-red-200 rounded-xl'>
+          <AlertCircle className='w-5 h-5 text-red-600' />
+          <p className='text-sm text-red-900'>
+            Payment system not configured. Please contact support.
+          </p>
         </div>
       )}
 

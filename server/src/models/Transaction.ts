@@ -22,8 +22,7 @@ export interface ITransaction {
 }
 
 export interface ITransactionDocument
-  extends Omit<ITransaction, '_id'>,
-    Document {}
+  extends Omit<ITransaction, '_id'>, Document {}
 
 const transactionSchema = new Schema<ITransactionDocument>(
   {
@@ -69,9 +68,19 @@ const transactionSchema = new Schema<ITransactionDocument>(
     paymentMethod: {
       type: String,
       required: true,
-      default: 'pending',
-      // ✅ REMOVED: enum restriction to allow any payment method
-      // This allows: stripe, paypal, cash_on_delivery, card, bank_transfer, etc.
+      paymentMethod: {
+        type: String,
+        required: true,
+        enum: [
+          'stripe',
+          'paypal',
+          'card',
+          'bank_transfer',
+          'cash_on_delivery',
+          'pending',
+        ],
+        default: 'pending',
+      },
     },
     description: {
       type: String,

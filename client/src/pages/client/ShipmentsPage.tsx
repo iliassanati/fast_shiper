@@ -2,6 +2,7 @@
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useNotificationStore, useShipmentStore } from '@/stores';
 import type { ShipmentStatus } from '@/types/client.types';
+import { formatShipmentDate } from '@/utils/formattingDate';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Calendar,
@@ -438,7 +439,7 @@ export default function ShipmentsPage() {
                           Est. Delivery
                         </p>
                         <p className='font-semibold text-blue-600'>
-                          {shipment.estimatedDelivery}
+                          {formatShipmentDate(shipment.estimatedDelivery)}
                         </p>
                       </div>
                     )}

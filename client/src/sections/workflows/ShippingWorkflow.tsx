@@ -118,14 +118,18 @@ export default function ShippingWorkflow({
 
   // Helper function to extract weight from package
   const getPackageWeight = (pkg: any): number => {
-    return (
-      pkg.weight ||
-      pkg.totalWeight ||
-      pkg.weightLbs ||
-      pkg.weight_lbs ||
-      pkg.packageWeight ||
-      0
-    );
+    // Handle object format from backend
+    if (pkg.weight && typeof pkg.weight === 'object') {
+      const value = pkg.weight.value || 0;
+      // Convert to kg if in lbs
+      return pkg.weight.unit === 'lb' ? value * 0.453592 : value;
+    }
+    // Handle raw weight values from old data
+    if (typeof pkg.weight === 'number') return pkg.weight;
+    if (typeof pkg.weight === 'string') return parseFloat(pkg.weight) || 0;
+
+    // Fallback to other fields
+    return pkg.totalWeight || pkg.packageWeight || 1;
   };
 
   // Helper function to extract value from package
@@ -208,6 +212,10 @@ export default function ShippingWorkflow({
 
   // Remove customs item
   const removeCustomsItem = (index: number) => {
+    if (customsItems.length <= 1) {
+      alert('You must have at least one customs item warning');
+      return;
+    }
     setCustomsItems(customsItems.filter((_, i) => i !== index));
   };
 
@@ -223,14 +231,24 @@ export default function ShippingWorkflow({
   };
 
   const handleNext = async () => {
+    if (currentStep === 1) {
+      if (!selectedPackages || selectedPackages.length === 0) {
+        alert('Please select at least one package error');
+        return;
+      }
+      setCurrentStep(2);
+    }
+
     // Step 2: Fetch rates after filling destination
     if (currentStep === 2) {
       // Validate destination
       if (
-        !destination.fullName ||
-        !destination.street ||
-        !destination.city ||
-        !destination.phone
+        !destination.fullName?.trim() ||
+        !destination.street?.trim() ||
+        !destination.city?.trim() ||
+        !destination.country?.trim() ||
+        !destination.phone?.trim() ||
+        !destination.postalCode?.trim()
       ) {
         alert('Please fill in all required fields');
         return;
@@ -250,10 +268,36 @@ export default function ShippingWorkflow({
         }
       }
 
+      // Add dimension extraction in ShippingWorkflow.tsx
+      const getDimensions = (pkg: any) => {
+        if (pkg.dimensions && typeof pkg.dimensions === 'object') {
+          const { length, width, height, unit } = pkg.dimensions;
+          // Convert to cm if in inches
+          if (unit === 'in') {
+            return {
+              length: length * 2.54,
+              width: width * 2.54,
+              height: height * 2.54,
+            };
+          }
+          return { length, width, height };
+        }
+        // Default dimensions if not provided
+        return { length: 30, width: 30, height: 30 }; // More realistic default
+      };
+
+      // Calculate total volume or use largest package
+      const packageDimensions = selectedPackages.map(getDimensions);
+      const maxDimensions = {
+        length: Math.max(...packageDimensions.map((d) => d.length)),
+        width: Math.max(...packageDimensions.map((d) => d.width)),
+        height: packageDimensions.reduce((sum, d) => sum + (d.height || 30), 0),
+      };
+
       // Fetch rates
       await fetchRates({
         weight: totalWeight || 1,
-        dimensions: { length: 12, width: 10, height: 8 },
+        dimensions: maxDimensions,
         destinationPostalCode: destination.postalCode,
         destinationCity: destination.city,
         destinationPhone: destination.phone,
@@ -281,14 +325,21 @@ export default function ShippingWorkflow({
 
   const calculateCosts = () => {
     const shipping = selectedRate?.amount || 0;
-    const insurance = insuranceEnabled ? insuranceCoverage * 0.01 : 0;
+
+    // Calculate insurance cost correctly
+    let insuranceCost = 0;
+    if (insuranceEnabled && insuranceCoverage > 100) {
+      // Free up to $100, then $0.01 per $1 (1% of coverage)
+      insuranceCost = (insuranceCoverage - 100) * 0.01;
+    }
+
     const protection = consolidation?.hasExtraProtection ? 2 : 0;
     const photoRequests = (consolidation?.photoRequests || 0) * 2;
-    const total = shipping + insurance + protection + photoRequests;
+    const total = shipping + insuranceCost + protection + photoRequests;
 
     return {
       shipping,
-      insurance,
+      insurance: insuranceCost, // ✅ Fixed
       protection,
       photoRequests,
       total,
@@ -344,7 +395,9 @@ export default function ShippingWorkflow({
       destination.phone,
     3: selectedRate !== null,
     4: true,
-    5: customsItems.every((item) => item.description && item.value > 0),
+    5:
+      customsItems.length > 0 &&
+      customsItems.every((item) => item.description && item.value > 0),
     6: true,
     7: false,
   };
@@ -595,6 +648,9 @@ export default function ShippingWorkflow({
                           }
                           className='w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none'
                           placeholder='20000'
+                          required
+                          minLength={4}
+                          maxLength={10}
                         />
                       </div>
                     </div>
