@@ -1,106 +1,45 @@
-// server/src/routes/admin/adminShipmentRoutes.ts - ENHANCED VERSION
+// server/src/routes/admin/adminShipmentRoutes.ts
 import { Router } from 'express';
 import * as adminShipmentController from '../../controllers/admin/adminShipmentController.js';
 import { authenticateAdmin } from '../../middleware/adminAuth.js';
 
 const router = Router();
 
-// All routes require admin authentication
 router.use(authenticateAdmin);
 
 /**
- * @route   GET /api/admin/shipments
- * @desc    Get all shipments with filters and transaction data
- * @access  Private (Admin)
- */
-router.get('/', adminShipmentController.getAllShipments);
-
-/**
- * @route   GET /api/admin/shipments/statistics
- * @desc    Get shipment statistics including payment stats
- * @access  Private (Admin)
+ * Statistics & Reporting
  */
 router.get('/statistics', adminShipmentController.getShipmentStatistics);
 
 /**
- * @route   POST /api/admin/shipments/get-rates
- * @desc    Get DHL shipping rates
- * @access  Private (Admin)
+ * Rates & Creation
  */
-router.post('/get-rates', adminShipmentController.getDHLRates);
+router.post('/get-rates', adminShipmentController.getShippingRates);
+router.post('/', adminShipmentController.createShipmentForUser);
 
 /**
- * @route   POST /api/admin/shipments/bulk-update
- * @desc    Bulk update shipment status
- * @access  Private (Admin)
+ * Bulk Operations
  */
 router.post('/bulk-update', adminShipmentController.bulkUpdateShipments);
 
 /**
- * @route   GET /api/admin/shipments/:id
- * @desc    Get single shipment details with transaction
- * @access  Private (Admin)
+ * List & Details
  */
+router.get('/', adminShipmentController.getAllShipments);
 router.get('/:id', adminShipmentController.getShipmentDetails);
 
 /**
- * @route   PUT /api/admin/shipments/:id
- * @desc    Update shipment details
- * @access  Private (Admin)
- */
-router.put('/:id', adminShipmentController.updateShipmentDetails);
-
-/**
- * @route   PUT /api/admin/shipments/:id/status
- * @desc    Update shipment status
- * @access  Private (Admin)
- */
-router.put('/:id/status', adminShipmentController.updateShipmentStatusById);
-
-/**
- * @route   POST /api/admin/shipments/:id/tracking
- * @desc    Add tracking event
- * @access  Private (Admin)
- */
-router.post('/:id/tracking', adminShipmentController.addTrackingEvent);
-
-/**
- * @route   POST /api/admin/shipments/:id/create-label
- * @desc    Create DHL shipping label
- * @access  Private (Admin)
- */
-router.post('/:id/create-label', adminShipmentController.createDHLLabel);
-
-/**
- * 🔥 NEW ROUTES
- */
-
-/**
- * @route   POST /api/admin/shipments/:id/approve
- * @desc    Approve pending shipment
- * @access  Private (Admin)
+ * Status Management
  */
 router.post('/:id/approve', adminShipmentController.approveShipment);
-
-/**
- * @route   POST /api/admin/shipments/:id/reject
- * @desc    Reject pending shipment
- * @access  Private (Admin)
- */
 router.post('/:id/reject', adminShipmentController.rejectShipment);
-
-/**
- * @route   PUT /api/admin/shipments/:id/payment-status
- * @desc    Update payment status
- * @access  Private (Admin)
- */
 router.put('/:id/payment-status', adminShipmentController.updatePaymentStatus);
 
 /**
- * @route   POST /api/admin/shipments/:id/notify
- * @desc    Send custom notification to user
- * @access  Private (Admin)
+ * Tracking & Notifications
  */
+router.get('/:id/track', adminShipmentController.trackShipment);
 router.post('/:id/notify', adminShipmentController.sendCustomNotification);
 
 export default router;

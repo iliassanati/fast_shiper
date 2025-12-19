@@ -1,10 +1,12 @@
-// server/src/controllers/admin/adminShipmentController.ts - FIXED VERSION
+// server/src/controllers/admin/adminShipmentController.ts
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../../types/index.js';
 import { Shipment } from '../../models/Shipment.js';
 import { Package } from '../../models/Package.js';
 import { Transaction } from '../../models/Transaction.js';
+import { User } from '../../models/User.js';
 import { createNotification } from '../../models/Notification.js';
+import { shippoService } from '../../services/shippoService.js';
 import {
   sendSuccess,
   sendError,
@@ -13,7 +15,7 @@ import {
 } from '../../utils/responses.js';
 
 /**
- * Get all shipments (admin view) - ENHANCED
+ * Get all shipments with enhanced filters and transaction data
  * GET /api/admin/shipments
  */
 export const getAllShipments = async (
@@ -27,30 +29,64 @@ export const getAllShipments = async (
       return;
     }
 
-    const { status, userId, search, page = 1, limit = 20 } = req.query;
+    const {
+      status,
+      userId,
+      carrier,
+      search,
+      paymentStatus,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = req.query;
 
     const query: any = {};
 
+    // Status filter
     if (status) query.status = status;
+
+    // User filter
     if (userId) query.userId = userId;
 
+    // Carrier filter
+    if (carrier) query.carrier = carrier;
+
+    // Payment status filter
+    if (paymentStatus) query.paymentStatus = paymentStatus;
+
+    // Date range filter
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate as string);
+      if (endDate) query.createdAt.$lte = new Date(endDate as string);
+    }
+
+    // Search filter
     if (search) {
       query.$or = [
         { trackingNumber: { $regex: search, $options: 'i' } },
-        { carrier: { $regex: search, $options: 'i' } },
+        { 'recipientInfo.name': { $regex: search, $options: 'i' } },
+        { 'recipientInfo.phone': { $regex: search, $options: 'i' } },
       ];
     }
 
+    // Build sort object
+    const sort: any = {};
+    sort[sortBy as string] = sortOrder === 'asc' ? 1 : -1;
+
     const shipments = await Shipment.find(query)
       .populate('userId', 'name email suiteNumber phone')
-      .populate('packageIds')
-      .sort({ createdAt: -1 })
+      .populate('packages', 'trackingNumber description retailer')
+      .sort(sort)
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
       .lean()
       .exec();
 
-    // Fetch associated transactions for each shipment
+    // Fetch associated transactions
     const shipmentsWithTransactions = await Promise.all(
       shipments.map(async (shipment) => {
         const transaction = await Transaction.findOne({
@@ -91,7 +127,7 @@ export const getAllShipments = async (
 };
 
 /**
- * Get single shipment details - ENHANCED
+ * Get single shipment with full details
  * GET /api/admin/shipments/:id
  */
 export const getShipmentDetails = async (
@@ -106,42 +142,396 @@ export const getShipmentDetails = async (
     }
 
     const { id } = req.params;
-    const shipment = await findShipmentById(id);
+    const shipment = await Shipment.findById(id)
+      .populate('userId', 'name email suiteNumber phone address')
+      .populate('packages')
+      .lean();
 
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
       return;
     }
 
-    // Fetch transaction details
+    // Fetch transaction
     const transaction = await Transaction.findOne({
       relatedId: shipment._id,
       relatedModel: 'Shipment',
     }).populate('userId', 'name email');
 
-    const shipmentData = {
-      ...shipment.toObject(),
-      transaction: transaction
-        ? {
-            id: transaction._id,
-            status: transaction.status,
-            amount: transaction.amount,
-            paymentMethod: transaction.paymentMethod,
-            completedAt: transaction.completedAt,
-            createdAt: transaction.createdAt,
-            metadata: transaction.metadata,
-          }
-        : null,
-    };
+    // Get tracking info if available
+    let trackingInfo = null;
+    if (shipment.trackingNumber && shipment.carrier) {
+      try {
+        trackingInfo = await shippoService.trackShipment(
+          shipment.trackingNumber,
+          shipment.carrier
+        );
+      } catch (error) {
+        console.log('Could not fetch tracking info:', error);
+      }
+    }
 
-    sendSuccess(res, { shipment: shipmentData });
+    sendSuccess(res, {
+      shipment: {
+        ...shipment,
+        transaction: transaction
+          ? {
+              id: transaction._id,
+              status: transaction.status,
+              amount: transaction.amount,
+              paymentMethod: transaction.paymentMethod,
+              completedAt: transaction.completedAt,
+              createdAt: transaction.createdAt,
+              metadata: transaction.metadata,
+            }
+          : null,
+        trackingInfo,
+      },
+    });
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * ✅ FIXED: Approve shipment with proper payment check
+ * Get shipping rates (admin can check rates for any destination)
+ * POST /api/admin/shipments/get-rates
+ */
+export const getShippingRates = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.isAdmin) {
+      sendForbidden(res);
+      return;
+    }
+
+    const {
+      weight,
+      dimensions,
+      destinationCountryCode = 'MA',
+      destinationCity,
+      destinationPostalCode,
+      destinationPhone,
+      declaredValue,
+    } = req.body;
+
+    // Validations
+    if (!weight || parseFloat(weight) <= 0) {
+      sendError(res, 'Valid weight is required', 400);
+      return;
+    }
+
+    if (
+      !dimensions ||
+      !dimensions.length ||
+      !dimensions.width ||
+      !dimensions.height
+    ) {
+      sendError(res, 'Valid dimensions required', 400);
+      return;
+    }
+
+    if (!destinationCity) {
+      sendError(res, 'Destination city is required', 400);
+      return;
+    }
+
+    if (!destinationPhone) {
+      sendError(res, 'Destination phone is required', 400);
+      return;
+    }
+
+    if (!shippoService.isConfigured()) {
+      sendError(res, 'Shippo service not configured', 503);
+      return;
+    }
+
+    const rates = await shippoService.getRates({
+      weight: parseFloat(weight),
+      dimensions: {
+        length: parseFloat(dimensions.length),
+        width: parseFloat(dimensions.width),
+        height: parseFloat(dimensions.height),
+      },
+      originCountryCode: 'US',
+      destinationCountryCode,
+      destinationCity: destinationCity.trim(),
+      destinationPostalCode: destinationPostalCode?.trim() || '',
+      destinationPhone: destinationPhone.trim(),
+      declaredValue: declaredValue ? parseFloat(declaredValue) : undefined,
+    });
+
+    sendSuccess(res, { rates }, `Found ${rates.length} available rates`);
+  } catch (error: any) {
+    console.error('Error getting rates:', error);
+    sendError(res, error.message || 'Failed to get rates', 500);
+  }
+};
+
+/**
+ * Create shipment for a user (admin-initiated)
+ * POST /api/admin/shipments
+ */
+export const createShipmentForUser = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.isAdmin) {
+      sendForbidden(res);
+      return;
+    }
+
+    const {
+      userId,
+      packageIds,
+      destination,
+      rateObjectId,
+      carrier,
+      serviceLevel,
+      insurance,
+      customsInfo,
+      cost,
+      notes,
+    } = req.body;
+
+    // Validate required fields
+    if (!userId || !packageIds || packageIds.length === 0) {
+      sendError(res, 'User ID and package IDs are required', 400);
+      return;
+    }
+
+    if (!destination || !rateObjectId) {
+      sendError(res, 'Destination and rate are required', 400);
+      return;
+    }
+
+    // Verify user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      sendNotFound(res, 'User not found');
+      return;
+    }
+
+    // Verify packages
+    const packages = await Package.find({
+      _id: { $in: packageIds },
+      userId: userId,
+    });
+
+    if (packages.length !== packageIds.length) {
+      sendError(res, 'Some packages not found or do not belong to user', 400);
+      return;
+    }
+
+    // Check package status
+    const unshippablePackages = packages.filter(
+      (pkg) => pkg.status !== 'received' && pkg.status !== 'consolidated'
+    );
+
+    if (unshippablePackages.length > 0) {
+      sendError(
+        res,
+        `Cannot ship packages with status: ${unshippablePackages.map((p) => p.status).join(', ')}`,
+        400
+      );
+      return;
+    }
+
+    // Calculate total weight
+    let totalWeight = packages.reduce(
+      (sum, pkg) => sum + (pkg.weight?.value || 0),
+      0
+    );
+    totalWeight = totalWeight * 2.20462; // kg to lb
+
+    // Format addresses
+    const addressFrom = {
+      name: 'Fast Shipper Warehouse',
+      street1: '123 Warehouse St',
+      city: 'Miami',
+      state: 'FL',
+      zip: '33101',
+      country: 'US',
+      phone: '+13055551234',
+      email: 'warehouse@fastshipper.com',
+      validate: false,
+    };
+
+    const addressTo = {
+      name: destination.fullName,
+      street1: destination.street,
+      city: destination.city,
+      state: destination.state || '',
+      zip: destination.postalCode || '',
+      country: destination.country,
+      phone: destination.phone,
+      email: destination.email || user.email,
+      validate: false,
+    };
+
+    // Create parcel
+    const parcels = [
+      {
+        length: String(destination.dimensions?.length || 12),
+        width: String(destination.dimensions?.width || 10),
+        height: String(destination.dimensions?.height || 8),
+        distance_unit: 'in',
+        weight: String(totalWeight.toFixed(2)),
+        mass_unit: 'lb',
+      },
+    ];
+
+    // Prepare Shippo data
+    const shippoData: any = {
+      address_from: addressFrom,
+      address_to: addressTo,
+      parcels: parcels,
+      rate: rateObjectId,
+      metadata: {
+        userId: userId.substring(0, 50),
+        pkg_count: String(packageIds.length),
+        carrier: carrier,
+        adminCreated: 'true',
+      },
+    };
+
+    // Add customs if international
+    if (customsInfo && customsInfo.length > 0) {
+      shippoData.customs_declaration = {
+        contents_type: 'MERCHANDISE',
+        contents_explanation: 'Personal items',
+        non_delivery_option: 'RETURN',
+        certify: true,
+        certify_signer: addressTo.name,
+        incoterm: 'DDU',
+        items: customsInfo.map((item: any) => ({
+          description: item.description,
+          quantity: item.quantity,
+          net_weight: String(item.weight || 0.5),
+          mass_unit: 'kg',
+          value_amount: String(item.value),
+          value_currency: 'USD',
+          origin_country: item.countryOfOrigin || 'US',
+          tariff_number: item.hsCode || '',
+        })),
+        eel_pfc: 'NOEEI 30.37(a)',
+      };
+    }
+
+    // Add insurance if enabled
+    if (insurance?.enabled && insurance.coverage > 0) {
+      shippoData.insurance_amount = String(insurance.coverage);
+      shippoData.insurance_currency = 'USD';
+    }
+
+    console.log('Creating Shippo shipment...');
+    const shippoShipment = await shippoService.createShipment(shippoData);
+
+    // Update packages
+    await Package.updateMany(
+      { _id: { $in: packageIds } },
+      { status: 'shipped' }
+    );
+
+    // Create shipment record
+    const newShipment = await Shipment.create({
+      userId: userId,
+      packages: packageIds,
+      trackingNumber: shippoShipment.tracking_number || 'PENDING',
+      carrier: carrier,
+      serviceLevelName: serviceLevel,
+      status: shippoShipment.status === 'SUCCESS' ? 'in_transit' : 'pending',
+      recipientInfo: {
+        name: destination.fullName,
+        address: destination.street,
+        city: destination.city,
+        state: destination.state || '',
+        postalCode: destination.postalCode,
+        country: destination.country,
+        phone: destination.phone,
+        email: destination.email || user.email,
+      },
+      dimensions: destination.dimensions || {
+        length: 12,
+        width: 10,
+        height: 8,
+      },
+      weight: totalWeight,
+      declaredValue: insurance?.coverage || 0,
+      shippingCost: cost?.shipping || 0,
+      photoRequestFees: cost?.photoRequests || 0,
+      protectionFee: cost?.protection || 0,
+      totalCost: cost?.total || 0,
+      paymentStatus: 'pending',
+      labelUrl: shippoShipment.label_url,
+      trackingUrl: shippoShipment.tracking_url_provider,
+      estimatedDelivery: shippoShipment.eta,
+      shippoTransactionId: shippoShipment.object_id,
+    });
+
+    // Create transaction
+    await Transaction.create({
+      userId: userId,
+      type: 'shipping',
+      relatedId: newShipment._id,
+      relatedModel: 'Shipment',
+      status: 'pending',
+      amount: {
+        value: cost?.total || 0,
+        currency: 'USD',
+      },
+      paymentMethod: 'pending',
+      description: `Admin-created shipment ${newShipment.trackingNumber}`,
+      metadata: {
+        carrier: carrier,
+        serviceLevel: serviceLevel,
+        trackingNumber: newShipment.trackingNumber,
+        packageCount: packageIds.length,
+        adminCreated: true,
+      },
+      notes: notes || 'Created by admin',
+    });
+
+    // Notify user
+    await createNotification({
+      userId: userId,
+      type: 'shipment_update',
+      title: 'Shipment Created',
+      message: `A shipment has been created for your packages. Tracking: ${newShipment.trackingNumber}`,
+      relatedId: newShipment._id,
+      relatedModel: 'Shipment',
+      priority: 'high',
+      actionUrl: `/shipments/${newShipment._id}`,
+    } as any);
+
+    sendSuccess(
+      res,
+      {
+        shipment: {
+          id: newShipment._id,
+          trackingNumber: newShipment.trackingNumber,
+          labelUrl: newShipment.labelUrl,
+          trackingUrl: newShipment.trackingUrl,
+          carrier: newShipment.carrier,
+          status: newShipment.status,
+        },
+      },
+      'Shipment created successfully',
+      201
+    );
+  } catch (error: any) {
+    console.error('Error creating shipment:', error);
+    sendError(res, error.message || 'Failed to create shipment', 500);
+  }
+};
+
+/**
+ * Approve shipment with payment verification
  * POST /api/admin/shipments/:id/approve
  */
 export const approveShipment = async (
@@ -158,7 +548,7 @@ export const approveShipment = async (
     const { id } = req.params;
     const { notes } = req.body;
 
-    const shipment = await findShipmentById(id);
+    const shipment = await Shipment.findById(id).populate('userId');
 
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
@@ -170,18 +560,17 @@ export const approveShipment = async (
       return;
     }
 
-    // ✅ CHECK: Verify payment status
+    // Check payment
     const transaction = await Transaction.findOne({
       relatedId: shipment._id,
       relatedModel: 'Shipment',
     });
 
     if (!transaction) {
-      sendError(res, 'No payment transaction found for this shipment', 400);
+      sendError(res, 'No transaction found for this shipment', 400);
       return;
     }
 
-    // ✅ IMPORTANT: Only approve if payment is completed OR COD
     const isPaymentValid =
       transaction.status === 'completed' ||
       transaction.paymentMethod === 'cash_on_delivery';
@@ -189,38 +578,26 @@ export const approveShipment = async (
     if (!isPaymentValid) {
       sendError(
         res,
-        `Cannot approve shipment - payment status is "${transaction.status}". Please confirm payment first.`,
+        `Cannot approve - payment status is "${transaction.status}"`,
         400
       );
       return;
     }
 
-    // Update shipment status
-    shipment.status = 'processing';
+    // Update shipment
+    shipment.status = 'in_transit';
     if (notes) {
-      shipment.notes = shipment.notes
-        ? `${shipment.notes}\n\nAdmin Approval Note: ${notes}`
-        : `Admin Approval Note: ${notes}`;
+      shipment.notes = notes;
     }
-
-    // Add tracking event
-    shipment.trackingEvents.push({
-      status: 'processing',
-      location: 'Warehouse - USA',
-      description: 'Shipment approved by admin and being prepared for dispatch',
-      timestamp: new Date(),
-    });
-
     await shipment.save();
 
-    // Update transaction if it was COD
+    // Update transaction if COD
     if (
       transaction.paymentMethod === 'cash_on_delivery' &&
       transaction.status !== 'completed'
     ) {
       transaction.status = 'completed';
       transaction.completedAt = new Date();
-      transaction.notes = 'COD shipment approved';
       await transaction.save();
     }
 
@@ -229,14 +606,12 @@ export const approveShipment = async (
       userId: shipment.userId,
       type: 'shipment_update',
       title: 'Shipment Approved ✅',
-      message: `Your shipment ${shipment.trackingNumber} has been approved and is being prepared for dispatch.`,
+      message: `Your shipment ${shipment.trackingNumber} has been approved and is in transit.`,
       relatedId: shipment._id,
       relatedModel: 'Shipment',
       priority: 'high',
       actionUrl: `/shipments/${shipment._id}`,
-    });
-
-    console.log(`✅ Shipment ${id} approved by admin`);
+    } as any);
 
     sendSuccess(res, { shipment }, 'Shipment approved successfully');
   } catch (error) {
@@ -267,45 +642,27 @@ export const rejectShipment = async (
       return;
     }
 
-    const shipment = await findShipmentById(id);
+    const shipment = await Shipment.findById(id).populate('userId');
 
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
       return;
     }
 
-    // Update shipment status
     shipment.status = 'cancelled';
-    shipment.notes = shipment.notes
-      ? `${shipment.notes}\n\nRejection Reason: ${reason}`
-      : `Rejection Reason: ${reason}`;
-
-    // Add tracking event
-    shipment.trackingEvents.push({
-      status: 'cancelled',
-      location: 'Warehouse - USA',
-      description: `Shipment rejected by admin: ${reason}`,
-      timestamp: new Date(),
-    });
-
+    shipment.notes = `Rejected: ${reason}`;
     await shipment.save();
 
-    // Update transaction status
-    const transaction = await Transaction.findOne({
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-    });
+    // Update transaction
+    await Transaction.findOneAndUpdate(
+      { relatedId: shipment._id, relatedModel: 'Shipment' },
+      { status: 'cancelled', notes: `Shipment rejected: ${reason}` }
+    );
 
-    if (transaction) {
-      transaction.status = 'cancelled';
-      transaction.notes = `Shipment rejected: ${reason}`;
-      await transaction.save();
-    }
-
-    // Return packages to available status
+    // Return packages to storage
     await Package.updateMany(
-      { _id: { $in: shipment.packageIds } },
-      { $set: { status: 'received', shipmentId: null } }
+      { _id: { $in: shipment.packages } },
+      { status: 'received' }
     );
 
     // Notify user
@@ -313,14 +670,12 @@ export const rejectShipment = async (
       userId: shipment.userId,
       type: 'shipment_update',
       title: 'Shipment Rejected',
-      message: `Your shipment request has been rejected. Reason: ${reason}. Your packages have been returned to storage. Please contact support for assistance.`,
+      message: `Your shipment was rejected. Reason: ${reason}`,
       relatedId: shipment._id,
       relatedModel: 'Shipment',
       priority: 'high',
       actionUrl: `/shipments/${shipment._id}`,
-    });
-
-    console.log(`❌ Shipment ${id} rejected by admin`);
+    } as any);
 
     sendSuccess(res, { shipment }, 'Shipment rejected successfully');
   } catch (error) {
@@ -358,8 +713,7 @@ export const updatePaymentStatus = async (
       return;
     }
 
-    const shipment = await findShipmentById(id);
-
+    const shipment = await Shipment.findById(id).populate('userId');
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
       return;
@@ -371,62 +725,51 @@ export const updatePaymentStatus = async (
     });
 
     if (!transaction) {
-      sendError(res, 'No transaction found for this shipment', 404);
+      sendError(res, 'No transaction found', 404);
       return;
     }
 
-    // Update transaction status
-    const oldStatus = transaction.status;
     transaction.status = status as any;
-
     if (status === 'completed') {
       transaction.completedAt = new Date();
     }
-
     if (notes) {
       transaction.notes = notes;
     }
-
     await transaction.save();
 
     // Notify user
-    let notificationMessage = '';
+    let message = '';
     if (status === 'completed') {
-      notificationMessage = `Payment for shipment ${shipment.trackingNumber} has been confirmed. Your shipment will be processed shortly.`;
+      message = `Payment confirmed for shipment ${shipment.trackingNumber}`;
     } else if (status === 'failed') {
-      notificationMessage = `Payment for shipment ${shipment.trackingNumber} failed. Please update your payment method or contact support.`;
-    } else if (status === 'refunded') {
-      notificationMessage = `Payment for shipment ${shipment.trackingNumber} has been refunded.`;
+      message = `Payment failed for shipment ${shipment.trackingNumber}`;
     }
 
-    if (notificationMessage) {
+    if (message) {
       await createNotification({
         userId: shipment.userId,
         type: 'payment_update',
         title: 'Payment Status Update',
-        message: notificationMessage,
+        message,
         relatedId: transaction._id,
         relatedModel: 'Transaction',
         priority: 'high',
         actionUrl: `/shipments/${shipment._id}`,
-      });
+      } as any);
     }
 
-    console.log(
-      `💳 Payment status updated for shipment ${id}: ${oldStatus} -> ${status}`
-    );
-
-    sendSuccess(res, { transaction }, 'Payment status updated successfully');
+    sendSuccess(res, { transaction }, 'Payment status updated');
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * Send custom notification to user
- * POST /api/admin/shipments/:id/notify
+ * Track shipment
+ * GET /api/admin/shipments/:id/track
  */
-export const sendCustomNotification = async (
+export const trackShipment = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -438,156 +781,27 @@ export const sendCustomNotification = async (
     }
 
     const { id } = req.params;
-    const { title, message, priority = 'normal' } = req.body;
-
-    if (!title || !message) {
-      sendError(res, 'Title and message are required', 400);
-      return;
-    }
-
-    const shipment = await findShipmentById(id);
+    const shipment = await Shipment.findById(id);
 
     if (!shipment) {
       sendNotFound(res, 'Shipment not found');
       return;
     }
 
-    await createNotification({
-      userId: shipment.userId,
-      type: 'shipment_update',
-      title,
-      message,
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-      priority: priority as any,
-      actionUrl: `/shipments/${shipment._id}`,
-    });
-
-    console.log(`📧 Custom notification sent to user for shipment ${id}`);
-
-    sendSuccess(res, null, 'Notification sent successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Create DHL shipping label
- * POST /api/admin/shipments/:id/create-label
- */
-export const createDHLLabel = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.isAdmin) {
-      sendForbidden(res);
+    if (!shipment.trackingNumber || !shipment.carrier) {
+      sendError(res, 'Tracking information not available', 400);
       return;
     }
 
-    const { id } = req.params;
-    const shipment = await findShipmentById(id);
-
-    if (!shipment) {
-      sendNotFound(res, 'Shipment not found');
-      return;
-    }
-
-    if (!dhlService.isConfigured()) {
-      sendError(
-        res,
-        'DHL service is not configured. Please contact system administrator.',
-        500
-      );
-      return;
-    }
-
-    if (shipment.notes?.includes('DHL Label:')) {
-      sendError(res, 'DHL label already exists for this shipment', 400);
-      return;
-    }
-
-    if (shipment.status !== 'processing') {
-      sendError(
-        res,
-        'Shipment must be approved (processing status) before creating label',
-        400
-      );
-      return;
-    }
-
-    console.log('📦 Creating DHL label for shipment:', shipment._id);
-
-    const dhlResponse = await dhlService.createShipment(shipment as any, {
-      includeLabel: true,
-      paperless: true,
-    });
-
-    console.log('✅ DHL shipment created:', dhlResponse.shipmentTrackingNumber);
-
-    shipment.trackingNumber = dhlResponse.shipmentTrackingNumber;
-    shipment.status = 'in_transit';
-    shipment.shippedDate = new Date();
-
-    shipment.trackingEvents.push({
-      status: 'in_transit',
-      location: 'DHL Facility - USA',
-      description: `Package handed over to DHL - Tracking: ${dhlResponse.shipmentTrackingNumber}`,
-      timestamp: new Date(),
-    });
-
-    const labelInfo = [
-      `DHL Label Created: ${new Date().toISOString()}`,
-      `Tracking: ${dhlResponse.shipmentTrackingNumber}`,
-      `Label URL: ${dhlResponse.labelUrl || 'N/A'}`,
-      `Waybill URL: ${dhlResponse.waybillUrl || 'N/A'}`,
-      `Estimated Delivery: ${dhlResponse.estimatedDelivery || 'N/A'}`,
-    ].join('\n');
-
-    shipment.notes = shipment.notes
-      ? `${shipment.notes}\n\n--- DHL SHIPMENT INFO ---\n${labelInfo}`
-      : `--- DHL SHIPMENT INFO ---\n${labelInfo}`;
-
-    if (dhlResponse.estimatedDelivery) {
-      shipment.estimatedDelivery = new Date(dhlResponse.estimatedDelivery);
-    }
-
-    await shipment.save();
-
-    await Package.updateMany(
-      { _id: { $in: shipment.packageIds } },
-      { $set: { status: 'in_transit' } }
+    const tracking = await shippoService.trackShipment(
+      shipment.trackingNumber,
+      shipment.carrier
     );
 
-    await createNotification({
-      userId: shipment.userId,
-      type: 'shipment_update',
-      title: 'Shipment In Transit 🚚',
-      message: `Your shipment is now in transit! DHL Tracking: ${dhlResponse.shipmentTrackingNumber}. Track your package for real-time updates.`,
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-      priority: 'high',
-      actionUrl: `/shipments/${shipment._id}`,
-    });
-
-    sendSuccess(
-      res,
-      {
-        shipment,
-        dhl: {
-          trackingNumber: dhlResponse.shipmentTrackingNumber,
-          trackingUrl: dhlResponse.trackingUrl,
-          labelUrl: dhlResponse.labelUrl,
-          waybillUrl: dhlResponse.waybillUrl,
-          estimatedDelivery: dhlResponse.estimatedDelivery,
-        },
-      },
-      'DHL shipping label created successfully'
-    );
+    sendSuccess(res, { tracking });
   } catch (error: any) {
-    console.error('❌ DHL Label Creation Error:', error);
-    sendError(res, error.message || 'Failed to create DHL label', 500);
+    console.error('Error tracking shipment:', error);
+    sendError(res, error.message || 'Failed to track shipment', 500);
   }
 };
 
@@ -612,10 +826,11 @@ export const getShipmentStatistics = async (
       total,
       byStatus,
       byCarrier,
+      byPaymentStatus,
       deliveredToday,
       avgDeliveryTime,
       totalRevenue,
-      paymentStats,
+      pendingPayments,
     ] = await Promise.all([
       Shipment.countDocuments(),
       Shipment.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
@@ -623,23 +838,24 @@ export const getShipmentStatistics = async (
         { $group: { _id: '$carrier', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
+      Shipment.aggregate([
+        { $group: { _id: '$paymentStatus', count: { $sum: 1 } } },
+      ]),
       Shipment.countDocuments({
         status: 'delivered',
-        actualDelivery: { $gte: today },
+        deliveredAt: { $gte: today },
       }),
       Shipment.aggregate([
         {
           $match: {
             status: 'delivered',
-            actualDelivery: { $exists: true },
-            shippedDate: { $exists: true },
+            deliveredAt: { $exists: true },
+            createdAt: { $exists: true },
           },
         },
         {
           $project: {
-            deliveryTime: {
-              $subtract: ['$actualDelivery', '$shippedDate'],
-            },
+            deliveryTime: { $subtract: ['$deliveredAt', '$createdAt'] },
           },
         },
         {
@@ -652,30 +868,20 @@ export const getShipmentStatistics = async (
       Shipment.aggregate([
         {
           $match: {
-            status: { $in: ['processing', 'in_transit', 'delivered'] },
+            status: { $in: ['in_transit', 'delivered'] },
           },
         },
         {
           $group: {
             _id: null,
-            total: { $sum: '$cost.total' },
+            total: { $sum: '$totalCost' },
           },
         },
       ]),
-      Transaction.aggregate([
-        {
-          $match: {
-            relatedModel: 'Shipment',
-          },
-        },
-        {
-          $group: {
-            _id: '$status',
-            count: { $sum: 1 },
-            total: { $sum: '$amount.value' },
-          },
-        },
-      ]),
+      Transaction.countDocuments({
+        relatedModel: 'Shipment',
+        status: 'pending',
+      }),
     ]);
 
     const statusBreakdown: Record<string, number> = {};
@@ -688,28 +894,25 @@ export const getShipmentStatistics = async (
       count: item.count,
     }));
 
+    const paymentBreakdown: Record<string, number> = {};
+    byPaymentStatus.forEach((item) => {
+      paymentBreakdown[item._id] = item.count;
+    });
+
     const avgDays = avgDeliveryTime[0]?.avgTime
       ? Math.round(avgDeliveryTime[0].avgTime / (1000 * 60 * 60 * 24))
       : 0;
-
-    const paymentBreakdown: Record<string, { count: number; total: number }> =
-      {};
-    paymentStats.forEach((item) => {
-      paymentBreakdown[item._id] = {
-        count: item.count,
-        total: item.total,
-      };
-    });
 
     sendSuccess(res, {
       statistics: {
         total,
         byStatus: statusBreakdown,
         byCarrier: carrierBreakdown,
+        byPaymentStatus: paymentBreakdown,
         deliveredToday,
         avgDeliveryDays: avgDays,
         totalRevenue: totalRevenue[0]?.total || 0,
-        payments: paymentBreakdown,
+        pendingPayments,
       },
     });
   } catch (error) {
@@ -718,172 +921,7 @@ export const getShipmentStatistics = async (
 };
 
 /**
- * Update shipment status
- * PUT /api/admin/shipments/:id/status
- */
-export const updateShipmentStatusById = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.isAdmin) {
-      sendForbidden(res);
-      return;
-    }
-
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const shipment = await findShipmentById(id);
-
-    if (!shipment) {
-      sendNotFound(res, 'Shipment not found');
-      return;
-    }
-
-    const updated = await updateShipmentStatus(id, status);
-
-    let notificationMessage = '';
-    let notificationTitle = '';
-
-    if (status === 'processing') {
-      notificationTitle = 'Shipment Processing';
-      notificationMessage = `Your shipment ${shipment.trackingNumber} is being prepared.`;
-    } else if (status === 'in_transit') {
-      notificationTitle = 'Shipment In Transit';
-      notificationMessage = `Your shipment ${shipment.trackingNumber} is on its way to Morocco!`;
-    } else if (status === 'delivered') {
-      notificationTitle = 'Shipment Delivered';
-      notificationMessage = `Your shipment ${shipment.trackingNumber} has been delivered!`;
-
-      await Package.updateMany(
-        { _id: { $in: shipment.packageIds } },
-        { $set: { status: 'delivered' } }
-      );
-    }
-
-    if (notificationMessage) {
-      await createNotification({
-        userId: shipment.userId,
-        type: 'shipment_update',
-        title: notificationTitle,
-        message: notificationMessage,
-        relatedId: shipment._id,
-        relatedModel: 'Shipment',
-        priority: status === 'delivered' ? 'high' : 'normal',
-        actionUrl: `/shipments/${shipment._id}`,
-      });
-    }
-
-    sendSuccess(res, { shipment: updated }, 'Status updated successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Add tracking event
- * POST /api/admin/shipments/:id/tracking
- */
-export const addTrackingEvent = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.isAdmin) {
-      sendForbidden(res);
-      return;
-    }
-
-    const { id } = req.params;
-    const { status, location, description } = req.body;
-
-    const shipment = await findShipmentById(id);
-
-    if (!shipment) {
-      sendNotFound(res, 'Shipment not found');
-      return;
-    }
-
-    shipment.trackingEvents.push({
-      status,
-      location,
-      description,
-      timestamp: new Date(),
-    });
-
-    await shipment.save();
-
-    await createNotification({
-      userId: shipment.userId,
-      type: 'shipment_update',
-      title: 'Tracking Update',
-      message: `${description} - ${location}`,
-      relatedId: shipment._id,
-      relatedModel: 'Shipment',
-      priority: 'normal',
-      actionUrl: `/shipments/${shipment._id}`,
-    });
-
-    sendSuccess(res, { shipment }, 'Tracking event added successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Update shipment details
- * PUT /api/admin/shipments/:id
- */
-export const updateShipmentDetails = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.isAdmin) {
-      sendForbidden(res);
-      return;
-    }
-
-    const { id } = req.params;
-    const updates = req.body;
-
-    const shipment = await findShipmentById(id);
-
-    if (!shipment) {
-      sendNotFound(res, 'Shipment not found');
-      return;
-    }
-
-    const allowedUpdates = [
-      'carrier',
-      'serviceLevel',
-      'estimatedDelivery',
-      'weight',
-      'dimensions',
-      'cost',
-      'notes',
-    ];
-
-    allowedUpdates.forEach((field) => {
-      if (updates[field] !== undefined) {
-        (shipment as any)[field] = updates[field];
-      }
-    });
-
-    await shipment.save();
-
-    sendSuccess(res, { shipment }, 'Shipment updated successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Bulk update shipment status
+ * Bulk update shipments
  * POST /api/admin/shipments/bulk-update
  */
 export const bulkUpdateShipments = async (
@@ -897,7 +935,7 @@ export const bulkUpdateShipments = async (
       return;
     }
 
-    const { shipmentIds, status, notes } = req.body;
+    const { shipmentIds, status, paymentStatus, notes } = req.body;
 
     if (
       !shipmentIds ||
@@ -910,6 +948,7 @@ export const bulkUpdateShipments = async (
 
     const updateData: any = {};
     if (status) updateData.status = status;
+    if (paymentStatus) updateData.paymentStatus = paymentStatus;
     if (notes) updateData.notes = notes;
 
     const result = await Shipment.updateMany(
@@ -928,10 +967,10 @@ export const bulkUpdateShipments = async (
 };
 
 /**
- * Get DHL rates for admin
- * POST /api/admin/shipments/get-rates
+ * Send custom notification
+ * POST /api/admin/shipments/:id/notify
  */
-export const getDHLRates = async (
+export const sendCustomNotification = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -942,31 +981,33 @@ export const getDHLRates = async (
       return;
     }
 
-    const { weight, dimensions, destinationPostalCode, destinationCity } =
-      req.body;
+    const { id } = req.params;
+    const { title, message, priority = 'normal' } = req.body;
 
-    if (!weight || !dimensions) {
-      sendError(res, 'Weight and dimensions are required', 400);
+    if (!title || !message) {
+      sendError(res, 'Title and message are required', 400);
       return;
     }
 
-    if (!dhlService.isConfigured()) {
-      sendError(res, 'DHL service is not configured', 500);
+    const shipment = await Shipment.findById(id);
+    if (!shipment) {
+      sendNotFound(res, 'Shipment not found');
       return;
     }
 
-    const rates = await dhlService.getRates({
-      weight,
-      dimensions,
-      originCountryCode: 'US',
-      destinationCountryCode: 'MA',
-      destinationPostalCode,
-      destinationCity,
-    });
+    await createNotification({
+      userId: shipment.userId,
+      type: 'shipment_update',
+      title,
+      message,
+      relatedId: shipment._id,
+      relatedModel: 'Shipment',
+      priority: priority as any,
+      actionUrl: `/shipments/${shipment._id}`,
+    } as any);
 
-    sendSuccess(res, { rates });
-  } catch (error: any) {
-    console.error('DHL Rates Error:', error);
-    sendError(res, error.message || 'Failed to get DHL rates', 500);
+    sendSuccess(res, null, 'Notification sent successfully');
+  } catch (error) {
+    next(error);
   }
 };
