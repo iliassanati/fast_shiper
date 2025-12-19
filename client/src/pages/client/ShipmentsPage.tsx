@@ -107,7 +107,7 @@ export default function ShipmentsPage() {
 
     // Apply search filter
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+      const query = searchQuery?.toLowerCase();
       filtered = filtered.filter(
         (s) =>
           s.trackingNumber.toLowerCase().includes(query) ||

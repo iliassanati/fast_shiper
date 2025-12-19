@@ -179,12 +179,16 @@ export default function ShippingWorkflow({
     });
     setUseSavedAddress(true);
     setSaveThisAddress(false);
+
+    setAddressLabel('');
   };
 
   // Handle new address mode
   const handleAddNewAddress = () => {
     setUseSavedAddress(false);
     setSelectedAddressId(null);
+    setAddressLabel(''); // Clear label
+    setSaveThisAddress(false); // Reset checkbox
     setDestination({
       fullName: '',
       street: '',
@@ -237,6 +241,7 @@ export default function ShippingWorkflow({
         return;
       }
       setCurrentStep(2);
+      return;
     }
 
     // Step 2: Fetch rates after filling destination
@@ -325,23 +330,27 @@ export default function ShippingWorkflow({
 
   const calculateCosts = () => {
     const shipping = selectedRate?.amount || 0;
+    const adminBenefit = 10; // $10 admin fee
 
-    // Calculate insurance cost correctly
+    // Calculate insurance cost correctly (1% of coverage above $100)
     let insuranceCost = 0;
     if (insuranceEnabled && insuranceCoverage > 100) {
-      // Free up to $100, then $0.01 per $1 (1% of coverage)
       insuranceCost = (insuranceCoverage - 100) * 0.01;
     }
 
     const protection = consolidation?.hasExtraProtection ? 2 : 0;
     const photoRequests = (consolidation?.photoRequests || 0) * 2;
-    const total = shipping + insuranceCost + protection + photoRequests;
+
+    const subtotal = shipping + insuranceCost + protection + photoRequests;
+    const total = subtotal + adminBenefit;
 
     return {
       shipping,
-      insurance: insuranceCost, // ✅ Fixed
+      adminBenefit,
+      insurance: insuranceCost,
       protection,
       photoRequests,
+      subtotal,
       total,
       currency: 'USD',
     };
@@ -400,6 +409,23 @@ export default function ShippingWorkflow({
       customsItems.every((item) => item.description && item.value > 0),
     6: true,
     7: false,
+  };
+
+  // Calculate insurance based on declared value AND service
+  const calculateInsuranceCost = (declaredValue: number, carrier: string) => {
+    // Base insurance is FREE up to $100
+    const freeCoverage = 100;
+
+    if (declaredValue <= freeCoverage) {
+      return 0;
+    }
+
+    // Calculate additional insurance cost
+    // 1% of coverage amount (or $0.01 per $1)
+    const additionalCoverage = declaredValue - freeCoverage;
+    const insuranceCost = additionalCoverage * 0.01;
+
+    return insuranceCost;
   };
 
   return (
@@ -489,12 +515,18 @@ export default function ShippingWorkflow({
                   <div className='space-y-4'>
                     {selectedPackages?.map((pkg, idx) => {
                       const weight = getPackageWeight(pkg);
+                      const weightUnit = pkg.weight?.unit || 'kg';
+                      const displayWeight =
+                        weight > 0
+                          ? `${weight.toFixed(2)} ${weightUnit}`
+                          : 'Not specified';
                       const value = getPackageValue(pkg);
 
                       return (
                         <div
                           key={idx}
-                          className='p-4 bg-slate-50 rounded-xl border-2 border-slate-200'
+                          // className='p-4 bg-slate-50 rounded-xl border-2 border-slate-200'
+                          className='p-4 bg-slate-50 rounded-xl border-2 border-blue-300 shadow-sm'
                         >
                           <div className='flex items-center justify-between'>
                             <div>
@@ -504,9 +536,7 @@ export default function ShippingWorkflow({
                                   `Package ${idx + 1}`}
                               </p>
                               <p className='text-sm text-slate-600'>
-                                Weight:{' '}
-                                {weight > 0 ? `${weight} lbs` : 'Not specified'}{' '}
-                                | Value:{' '}
+                                {displayWeight} | Value:{' '}
                                 {value > 0 ? `$${value}` : 'Not specified'}
                               </p>
                               {pkg.trackingNumber && (
@@ -527,14 +557,16 @@ export default function ShippingWorkflow({
                         <p className='text-sm text-slate-600'>Total Weight</p>
                         <p className='text-2xl font-bold text-blue-600'>
                           {totalWeight > 0
-                            ? `${totalWeight} lbs`
+                            ? `${totalWeight} `
                             : 'Not specified'}
                         </p>
                       </div>
                       <div>
                         <p className='text-sm text-slate-600'>Total Value</p>
                         <p className='text-2xl font-bold text-blue-600'>
-                          {totalValue > 0 ? `$${totalValue}` : 'Not specified'}
+                          {totalValue > 0
+                            ? `$${totalValue.toFixed(2)}`
+                            : 'Not specified'}
                         </p>
                       </div>
                     </div>
@@ -858,7 +890,11 @@ export default function ShippingWorkflow({
                       <div className='flex items-center justify-between'>
                         <span className='text-slate-700'>Insurance Cost:</span>
                         <span className='text-xl font-bold text-blue-600'>
-                          ${(insuranceCoverage * 0.01).toFixed(2)}
+                          $
+                          {(insuranceCoverage > 100
+                            ? (insuranceCoverage - 100) * 0.01
+                            : 0
+                          ).toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -1117,6 +1153,39 @@ export default function ShippingWorkflow({
                 )}
               </div>
 
+              <div className='space-y-3'>
+                <div className='p-4 bg-blue-50 rounded-xl'>
+                  <div className='flex justify-between'>
+                    <span>Service Fee</span>
+                    <span className='font-bold'>
+                      ${costs.adminBenefit.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {costs.protection > 0 && (
+                  <div className='p-4 bg-green-50 rounded-xl'>
+                    <div className='flex justify-between'>
+                      <span>Extra Protection</span>
+                      <span className='font-bold'>
+                        ${costs.protection.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {costs.photoRequests > 0 && (
+                  <div className='p-4 bg-orange-50 rounded-xl'>
+                    <div className='flex justify-between'>
+                      <span>Photo Requests</span>
+                      <span className='font-bold'>
+                        ${costs.photoRequests.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className='p-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl text-white'>
                 <div className='flex items-center justify-between'>
                   <span className='text-lg font-semibold'>Total Amount</span>
@@ -1166,6 +1235,12 @@ export default function ShippingWorkflow({
                 onCancel={handleBack}
                 loading={submitting}
               />
+              <button
+                onClick={handleBack}
+                className='w-full px-6 py-3 border-2 border-slate-300 rounded-xl font-semibold text-slate-700 hover:bg-slate-50 transition-colors'
+              >
+                ← Go Back to Summary
+              </button>
             </div>
           )}
 

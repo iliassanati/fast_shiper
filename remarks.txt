@@ -47,7 +47,30 @@ Phone
 sdsdd
 
 
-installHook.js:1 ❌ Payment completion failed: TypeError: onComplete is not a function
-    at handlePaymentComplete (ShippingWorkflow.tsx:252:5)
-    at handleStripeSuccess (PaymentMethod.tsx:76:7)
-    at handleSubmit (StripePayment.tsx:85:7)
+
+- in shipping workflow 
++ step 1 : packages : 
+ - add a border blue like the one used in others flow, to show which package is selected;
+ - the wight's unit is not changing, it stays in lbs either if the unit is kg
+ - if the price is there the total value should indicate the price of the product
+ - when i click on Next Step it takes me to shipping, instead of destination
+
++ step 2 : Destination : 
+ - when i save and adress, the form does not reinitialize automatically;
+
++ step 3 : Shipping : 
+ - there no prices for fedex and aramex, for my case, in morocco it always shows me USPS and DHL
+
++ step 4 : Insurance :
+ - the insurance amount should be based on the service, cause normally the service who proposed how much the user should pay to get insurance
+ 
++ step 6 : Summary :
+- In the summary, it should list : the shipping fees, + 10 $ of the benefits for the administrator, insurance if they are selected, and the 2$ if the user had already make a photos request
+
++ step 7 : Payment :
+- The user should have the possiblity to go back and modify something if he want to;
+- when the user make the payment, i can't see it in stripe sandbox, is it normall ?
+
+- Shippement Page and Shipment details : 
+- i want the informations shown in the page to be related to the reel package, no hardcode info;
+- download invoice is not working

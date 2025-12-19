@@ -550,7 +550,7 @@ export const getShipments = async (
     // Fetch shipments with proper population
     const shipments = await Shipment.find(query)
       .populate('packages', 'description retailer trackingNumber')
-      .populate('user', 'name email')
+      .populate('userId', 'name email')
       .sort({ createdAt: -1 })
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
