@@ -221,7 +221,7 @@ export default function TrustedStoresSection() {
         href={`https://${store.domain}`}
         target='_blank'
         rel='noopener noreferrer'
-        className='relative aspect-[4/3] bg-slate-100 flex items-center justify-center p-4 cursor-pointer overflow-hidden no-underline transition-all duration-300 ease-out'
+        className='relative aspect-[4/3] flex items-center justify-center p-4 cursor-pointer overflow-hidden no-underline transition-all duration-300 ease-out'
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         initial={{ opacity: 0, y: 20 }}

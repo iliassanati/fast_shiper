@@ -50,10 +50,7 @@ const services: Service[] = [
 
 export default function FeaturesSection() {
   return (
-    <section
-      id='features'
-      className='py-2 px-6 bg-gradient-to-br from-slate-50 to-blue-50'
-    >
+    <section id='features' className='py-2 px-6 '>
       {/* 
     <section id='features' className='bg-slate-100'> */}
       {/* Services Section */}

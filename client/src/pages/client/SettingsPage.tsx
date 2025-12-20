@@ -1,4 +1,4 @@
-// src/pages/client/SettingsPage.tsx - OPTIMIZED UX/UI VERSION
+// client/src/pages/client/SettingsPage.tsx - ENHANCED UX/UI VERSION
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -21,6 +21,12 @@ import {
   Info,
   CheckCircle2,
   XCircle,
+  Settings as SettingsIcon,
+  Sparkles,
+  Zap,
+  Star,
+  Calendar,
+  ArrowRight,
 } from 'lucide-react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -57,7 +63,7 @@ interface ConfirmDialog {
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
-  const { addNotification } = useNotificationStore();
+  const { showToast } = useNotificationStore();
 
   // Active tab state
   const [activeTab, setActiveTab] = useState('notifications');
@@ -105,9 +111,9 @@ export default function SettingsPage() {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       setOriginalNotifications(notifications);
       setHasNotificationChanges(false);
-      addNotification('Notification preferences saved successfully', 'success');
+      showToast('Notification preferences saved successfully!', 'success');
     } catch (error) {
-      addNotification('Failed to save notification preferences', 'error');
+      showToast('Failed to save notification preferences', 'error');
     } finally {
       setSavingNotifications(false);
     }
@@ -169,30 +175,27 @@ export default function SettingsPage() {
     e.preventDefault();
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      addNotification('Passwords do not match', 'error');
+      showToast('Passwords do not match', 'error');
       return;
     }
 
     const passwordErrors = validatePassword(passwordForm.newPassword);
     if (passwordErrors.length > 0) {
-      addNotification(
-        `Password must contain: ${passwordErrors.join(', ')}`,
-        'error'
-      );
+      showToast(`Password must contain: ${passwordErrors.join(', ')}`, 'error');
       return;
     }
 
     setChangingPassword(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      addNotification('Password changed successfully', 'success');
+      showToast('Password changed successfully!', 'success');
       setPasswordForm({
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       });
     } catch (error) {
-      addNotification('Failed to change password', 'error');
+      showToast('Failed to change password', 'error');
     } finally {
       setChangingPassword(false);
     }
@@ -214,17 +217,14 @@ export default function SettingsPage() {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           setTwoFactorEnabled(!twoFactorEnabled);
-          addNotification(
+          showToast(
             `Two-factor authentication ${
               !twoFactorEnabled ? 'enabled' : 'disabled'
-            }`,
+            } successfully!`,
             'success'
           );
         } catch (error) {
-          addNotification(
-            'Failed to update two-factor authentication',
-            'error'
-          );
+          showToast('Failed to update two-factor authentication', 'error');
         } finally {
           setEnablingTwoFactor(false);
           setConfirmDialog({ ...confirmDialog, isOpen: false });
@@ -249,7 +249,7 @@ export default function SettingsPage() {
     {
       id: '2',
       type: 'paypal',
-      email: 'youssef@example.com',
+      email: 'user@example.com',
       isDefault: false,
     },
   ]);
@@ -262,16 +262,16 @@ export default function SettingsPage() {
       setPaymentMethods((prev) =>
         prev.map((pm) => ({ ...pm, isDefault: pm.id === id }))
       );
-      addNotification('Default payment method updated', 'success');
+      showToast('Default payment method updated successfully!', 'success');
     } catch (error) {
-      addNotification('Failed to update default payment method', 'error');
+      showToast('Failed to update default payment method', 'error');
     }
   };
 
   const handleRemovePayment = (id: string) => {
     const method = paymentMethods.find((pm) => pm.id === id);
     if (method?.isDefault && paymentMethods.length > 1) {
-      addNotification(
+      showToast(
         'Cannot remove default payment method. Set another as default first.',
         'warning'
       );
@@ -289,9 +289,9 @@ export default function SettingsPage() {
         try {
           await new Promise((resolve) => setTimeout(resolve, 500));
           setPaymentMethods((prev) => prev.filter((pm) => pm.id !== id));
-          addNotification('Payment method removed', 'success');
+          showToast('Payment method removed successfully!', 'success');
         } catch (error) {
-          addNotification('Failed to remove payment method', 'error');
+          showToast('Failed to remove payment method', 'error');
         } finally {
           setConfirmDialog({ ...confirmDialog, isOpen: false });
         }
@@ -347,9 +347,9 @@ export default function SettingsPage() {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       setOriginalLanguageSettings(languageSettings);
       setHasLanguageChanges(false);
-      addNotification('Language preferences saved successfully', 'success');
+      showToast('Language preferences saved successfully!', 'success');
     } catch (error) {
-      addNotification('Failed to save language preferences', 'error');
+      showToast('Failed to save language preferences', 'error');
     } finally {
       setSavingLanguage(false);
     }
@@ -515,7 +515,7 @@ export default function SettingsPage() {
                   animate={{ rotate: [0, 10, -10, 0] }}
                   transition={{ duration: 0.5 }}
                 >
-                  <AlertCircle className='w-5 h-5' />
+                  <Sparkles className='w-5 h-5' />
                 </motion.div>
                 <span className='font-semibold'>You have unsaved changes</span>
               </div>
@@ -566,14 +566,36 @@ export default function SettingsPage() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className='space-y-2'
+          className='flex flex-col md:flex-row items-start md:items-center justify-between gap-4'
         >
-          <h1 className='text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent'>
-            Settings
-          </h1>
-          <p className='text-lg text-slate-600'>
-            Manage your account preferences and settings
-          </p>
+          <div>
+            <h1 className='text-4xl font-bold text-slate-900 mb-2'>Settings</h1>
+            <p className='text-slate-600'>
+              Manage your account preferences and customize your experience
+            </p>
+          </div>
+
+          {/* Quick Stats */}
+          <div className='flex gap-3'>
+            <div className='px-4 py-2 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl'>
+              <p className='text-xs text-blue-600 font-semibold mb-1'>
+                Account Status
+              </p>
+              <p className='text-lg font-bold text-blue-900 flex items-center gap-1'>
+                <CheckCircle2 className='w-4 h-4' />
+                Active
+              </p>
+            </div>
+            <div className='px-4 py-2 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl'>
+              <p className='text-xs text-green-600 font-semibold mb-1'>
+                Security Level
+              </p>
+              <p className='text-lg font-bold text-green-900 flex items-center gap-1'>
+                <Shield className='w-4 h-4' />
+                {twoFactorEnabled ? 'High' : 'Medium'}
+              </p>
+            </div>
+          </div>
         </motion.div>
 
         {/* Enhanced Tabs */}
@@ -634,17 +656,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex items-center gap-3 mb-6'>
-                  <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center'>
-                    <Mail className='w-5 h-5 text-white' />
+                <div className='bg-gradient-to-r from-blue-600 to-cyan-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Mail className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Notification Channels
+                      </h2>
+                      <p className='text-blue-100 text-sm'>
+                        Choose how you want to receive notifications
+                      </p>
+                    </div>
                   </div>
-                  <h3 className='font-bold text-xl text-slate-900'>
-                    Notification Channels
-                  </h3>
                 </div>
-                <div className='space-y-4'>
+
+                <div className='p-6 space-y-4'>
                   {[
                     {
                       icon: Mail,
@@ -657,7 +687,7 @@ export default function SettingsPage() {
                       icon: Smartphone,
                       key: 'sms',
                       label: 'SMS Notifications',
-                      desc: 'Receive updates via SMS',
+                      desc: 'Receive updates via text message',
                       color: 'from-green-500 to-green-600',
                     },
                   ].map((item) => (
@@ -668,7 +698,7 @@ export default function SettingsPage() {
                     >
                       <div className='flex items-center gap-4 flex-1'>
                         <div
-                          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center`}
+                          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}
                         >
                           <item.icon className='w-6 h-6 text-white' />
                         </div>
@@ -703,12 +733,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <h3 className='font-bold text-xl text-slate-900 mb-6'>
-                  Notification Types
-                </h3>
-                <div className='space-y-4'>
+                <div className='bg-gradient-to-r from-purple-600 to-pink-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Zap className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Notification Preferences
+                      </h2>
+                      <p className='text-purple-100 text-sm'>
+                        Select which notifications you want to receive
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className='p-6 space-y-4'>
                   {[
                     {
                       key: 'packageReceived',
@@ -795,17 +838,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex items-center gap-3 mb-6'>
-                  <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center'>
-                    <Lock className='w-5 h-5 text-white' />
+                <div className='bg-gradient-to-r from-blue-600 to-cyan-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Lock className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Change Password
+                      </h2>
+                      <p className='text-blue-100 text-sm'>
+                        Update your password to keep your account secure
+                      </p>
+                    </div>
                   </div>
-                  <h3 className='font-bold text-xl text-slate-900'>
-                    Change Password
-                  </h3>
                 </div>
-                <form onSubmit={handleChangePassword} className='space-y-5'>
+
+                <form onSubmit={handleChangePassword} className='p-6 space-y-5'>
                   <div>
                     <label className='block text-sm font-semibold text-slate-700 mb-2'>
                       Current Password
@@ -1032,82 +1083,92 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex items-center gap-3 mb-6'>
-                  <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center'>
-                    <Shield className='w-5 h-5 text-white' />
-                  </div>
-                  <h3 className='font-bold text-xl text-slate-900'>
-                    Two-Factor Authentication
-                  </h3>
-                </div>
-                <motion.div
-                  whileHover={{ scale: 1.01 }}
-                  className='flex flex-col sm:flex-row items-start justify-between gap-6 p-6 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-2xl border border-slate-200/50'
-                >
-                  <div className='flex items-start gap-4 flex-1'>
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                        twoFactorEnabled
-                          ? 'bg-gradient-to-br from-green-500 to-green-600'
-                          : 'bg-gradient-to-br from-slate-400 to-slate-500'
-                      }`}
-                    >
+                <div className='bg-gradient-to-r from-green-600 to-emerald-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
                       <Shield className='w-6 h-6 text-white' />
                     </div>
-                    <div className='flex-1'>
-                      <div className='flex items-center gap-2 mb-2'>
-                        <p className='font-bold text-slate-900'>
-                          {twoFactorEnabled ? 'Enabled' : 'Disabled'}
-                        </p>
-                        {twoFactorEnabled && (
-                          <CheckCircle2 className='w-5 h-5 text-green-600' />
-                        )}
-                      </div>
-                      <p className='text-sm text-slate-600 leading-relaxed'>
-                        Add an extra layer of security to your account with 2FA
-                        authentication
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Two-Factor Authentication
+                      </h2>
+                      <p className='text-green-100 text-sm'>
+                        Add an extra layer of security to your account
                       </p>
                     </div>
                   </div>
-                  <motion.button
-                    onClick={handleToggleTwoFactor}
-                    disabled={enablingTwoFactor}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 whitespace-nowrap shadow-md transition-all ${
-                      twoFactorEnabled
-                        ? 'bg-gradient-to-r from-red-100 to-red-50 text-red-600 hover:from-red-200 hover:to-red-100 shadow-red-500/20'
-                        : 'bg-gradient-to-r from-green-100 to-green-50 text-green-600 hover:from-green-200 hover:to-green-100 shadow-green-500/20'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {enablingTwoFactor ? (
-                      <Loader2 className='w-5 h-5 animate-spin' />
-                    ) : twoFactorEnabled ? (
-                      'Disable'
-                    ) : (
-                      'Enable'
-                    )}
-                  </motion.button>
-                </motion.div>
+                </div>
 
-                <AnimatePresence>
-                  {twoFactorEnabled && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className='mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100/50 rounded-2xl border border-green-200'
+                <div className='p-6'>
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    className='flex flex-col sm:flex-row items-start justify-between gap-6 p-6 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-2xl border border-slate-200/50'
+                  >
+                    <div className='flex items-start gap-4 flex-1'>
+                      <div
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${
+                          twoFactorEnabled
+                            ? 'bg-gradient-to-br from-green-500 to-green-600'
+                            : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                        }`}
+                      >
+                        <Shield className='w-6 h-6 text-white' />
+                      </div>
+                      <div className='flex-1'>
+                        <div className='flex items-center gap-2 mb-2'>
+                          <p className='font-bold text-slate-900'>
+                            {twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                          </p>
+                          {twoFactorEnabled && (
+                            <CheckCircle2 className='w-5 h-5 text-green-600' />
+                          )}
+                        </div>
+                        <p className='text-sm text-slate-600 leading-relaxed'>
+                          Add an extra layer of security to your account with
+                          2FA authentication
+                        </p>
+                      </div>
+                    </div>
+                    <motion.button
+                      onClick={handleToggleTwoFactor}
+                      disabled={enablingTwoFactor}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 whitespace-nowrap shadow-md transition-all ${
+                        twoFactorEnabled
+                          ? 'bg-gradient-to-r from-red-100 to-red-50 text-red-600 hover:from-red-200 hover:to-red-100 shadow-red-500/20'
+                          : 'bg-gradient-to-r from-green-100 to-green-50 text-green-600 hover:from-green-200 hover:to-green-100 shadow-green-500/20'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      <p className='text-sm text-green-900 flex items-center gap-2 font-medium'>
-                        <CheckCircle2 className='w-5 h-5' />
-                        Two-factor authentication is active. Your account is
-                        more secure!
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      {enablingTwoFactor ? (
+                        <Loader2 className='w-5 h-5 animate-spin' />
+                      ) : twoFactorEnabled ? (
+                        'Disable'
+                      ) : (
+                        'Enable'
+                      )}
+                    </motion.button>
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {twoFactorEnabled && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className='mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100/50 rounded-2xl border border-green-200'
+                      >
+                        <p className='text-sm text-green-900 flex items-center gap-2 font-medium'>
+                          <CheckCircle2 className='w-5 h-5' />
+                          Two-factor authentication is active. Your account is
+                          more secure!
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </motion.div>
 
               {/* Connected Devices */}
@@ -1115,17 +1176,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex items-center gap-3 mb-6'>
-                  <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center'>
-                    <Smartphone className='w-5 h-5 text-white' />
+                <div className='bg-gradient-to-r from-purple-600 to-pink-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Smartphone className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Connected Devices
+                      </h2>
+                      <p className='text-purple-100 text-sm'>
+                        Manage devices that have access to your account
+                      </p>
+                    </div>
                   </div>
-                  <h3 className='font-bold text-xl text-slate-900'>
-                    Connected Devices
-                  </h3>
                 </div>
-                <div className='space-y-4'>
+
+                <div className='p-6 space-y-4'>
                   {[
                     {
                       device: 'Chrome on MacBook Pro',
@@ -1201,174 +1270,185 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6'>
-                  <div className='flex items-center gap-3'>
-                    <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center'>
-                      <CreditCard className='w-5 h-5 text-white' />
+                <div className='bg-gradient-to-r from-blue-600 to-cyan-600 p-6'>
+                  <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
+                    <div className='flex items-center gap-3'>
+                      <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                        <CreditCard className='w-6 h-6 text-white' />
+                      </div>
+                      <div>
+                        <h2 className='text-xl font-bold text-white'>
+                          Payment Methods
+                        </h2>
+                        <p className='text-blue-100 text-sm'>
+                          Manage your payment options
+                        </p>
+                      </div>
                     </div>
-                    <h3 className='font-bold text-xl text-slate-900'>
-                      Payment Methods
-                    </h3>
-                  </div>
-                  <motion.button
-                    onClick={() => setShowAddPayment(!showAddPayment)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className='px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all'
-                  >
-                    <Plus className='w-4 h-4' />
-                    Add Method
-                  </motion.button>
-                </div>
-
-                {paymentMethods.length === 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className='text-center py-16'
-                  >
-                    <div className='w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-6'>
-                      <CreditCard className='w-12 h-12 text-slate-400' />
-                    </div>
-                    <h4 className='font-bold text-lg text-slate-900 mb-2'>
-                      No payment methods added
-                    </h4>
-                    <p className='text-slate-600 mb-6'>
-                      Add a payment method to start making transactions
-                    </p>
                     <motion.button
-                      onClick={() => setShowAddPayment(true)}
+                      onClick={() => setShowAddPayment(!showAddPayment)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className='px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30'
+                      className='px-5 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl font-semibold flex items-center gap-2 transition-all'
                     >
-                      Add Your First Payment Method
+                      <Plus className='w-4 h-4' />
+                      Add Method
                     </motion.button>
-                  </motion.div>
-                ) : (
-                  <div className='space-y-4'>
-                    {paymentMethods.map((method, index) => (
-                      <motion.div
-                        key={method.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        whileHover={{ scale: 1.01, x: 4 }}
-                        className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-2xl border border-slate-200/50 transition-all hover:shadow-md'
+                  </div>
+                </div>
+
+                <div className='p-6'>
+                  {paymentMethods.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className='text-center py-16'
+                    >
+                      <div className='w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-6'>
+                        <CreditCard className='w-12 h-12 text-slate-400' />
+                      </div>
+                      <h4 className='font-bold text-lg text-slate-900 mb-2'>
+                        No payment methods added
+                      </h4>
+                      <p className='text-slate-600 mb-6'>
+                        Add a payment method to start making transactions
+                      </p>
+                      <motion.button
+                        onClick={() => setShowAddPayment(true)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className='px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30'
                       >
-                        <div className='flex items-center gap-4'>
-                          {method.type === 'card' ? (
-                            <div className='w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30'>
-                              <CreditCard className='w-7 h-7 text-white' />
-                            </div>
-                          ) : (
-                            <div className='w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30'>
-                              <span className='text-white font-bold text-lg'>
-                                P
-                              </span>
-                            </div>
-                          )}
-                          <div>
+                        Add Your First Payment Method
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <div className='space-y-4'>
+                      {paymentMethods.map((method, index) => (
+                        <motion.div
+                          key={method.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          whileHover={{ scale: 1.01, x: 4 }}
+                          className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-2xl border border-slate-200/50 transition-all hover:shadow-md'
+                        >
+                          <div className='flex items-center gap-4'>
                             {method.type === 'card' ? (
-                              <>
-                                <p className='font-bold text-slate-900 mb-1'>
-                                  {method.brand} •••• {method.last4}
-                                </p>
-                                <p className='text-sm text-slate-600'>
-                                  Expires {method.expiryMonth}/
-                                  {method.expiryYear}
-                                </p>
-                              </>
+                              <div className='w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30'>
+                                <CreditCard className='w-7 h-7 text-white' />
+                              </div>
                             ) : (
-                              <>
-                                <p className='font-bold text-slate-900 mb-1'>
-                                  PayPal
-                                </p>
-                                <p className='text-sm text-slate-600'>
-                                  {method.email}
-                                </p>
-                              </>
+                              <div className='w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30'>
+                                <span className='text-white font-bold text-lg'>
+                                  P
+                                </span>
+                              </div>
+                            )}
+                            <div>
+                              {method.type === 'card' ? (
+                                <>
+                                  <p className='font-bold text-slate-900 mb-1'>
+                                    {method.brand} •••• {method.last4}
+                                  </p>
+                                  <p className='text-sm text-slate-600'>
+                                    Expires {method.expiryMonth}/
+                                    {method.expiryYear}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className='font-bold text-slate-900 mb-1'>
+                                    PayPal
+                                  </p>
+                                  <p className='text-sm text-slate-600'>
+                                    {method.email}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                            {method.isDefault && (
+                              <span className='px-3 py-1.5 bg-gradient-to-r from-green-100 to-green-50 text-green-700 rounded-full text-xs font-bold shadow-sm'>
+                                Default
+                              </span>
                             )}
                           </div>
-                          {method.isDefault && (
-                            <span className='px-3 py-1.5 bg-gradient-to-r from-green-100 to-green-50 text-green-700 rounded-full text-xs font-bold shadow-sm'>
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <div className='flex items-center gap-2'>
-                          {!method.isDefault && (
+                          <div className='flex items-center gap-2'>
+                            {!method.isDefault && (
+                              <motion.button
+                                onClick={() =>
+                                  handleSetDefaultPayment(method.id)
+                                }
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className='px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg font-semibold text-sm transition-all'
+                              >
+                                Set Default
+                              </motion.button>
+                            )}
                             <motion.button
-                              onClick={() => handleSetDefaultPayment(method.id)}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              className='px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg font-semibold text-sm transition-all'
+                              onClick={() => handleRemovePayment(method.id)}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              className='p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all'
                             >
-                              Set Default
+                              <Trash2 className='w-4 h-4' />
                             </motion.button>
-                          )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {showAddPayment && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className='mt-6 p-6 bg-gradient-to-r from-blue-50 to-blue-100/50 rounded-2xl border-2 border-blue-200'
+                      >
+                        <div className='flex items-start justify-between mb-4'>
+                          <div>
+                            <p className='text-sm text-blue-900 mb-1 font-bold'>
+                              Add New Payment Method
+                            </p>
+                            <p className='text-xs text-blue-800'>
+                              Payment method addition will redirect you to a
+                              secure Stripe/PayPal page.
+                            </p>
+                          </div>
                           <motion.button
-                            onClick={() => handleRemovePayment(method.id)}
-                            whileHover={{ scale: 1.1 }}
+                            onClick={() => setShowAddPayment(false)}
+                            whileHover={{ scale: 1.1, rotate: 90 }}
                             whileTap={{ scale: 0.9 }}
-                            className='p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all'
+                            className='p-1.5 hover:bg-blue-200 rounded-lg transition-all'
                           >
-                            <Trash2 className='w-4 h-4' />
+                            <X className='w-5 h-5 text-blue-600' />
+                          </motion.button>
+                        </div>
+                        <div className='flex gap-3'>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className='flex-1 px-5 py-3 bg-white border-2 border-blue-300 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm'
+                          >
+                            Add Card
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className='flex-1 px-5 py-3 bg-white border-2 border-blue-300 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm'
+                          >
+                            Add PayPal
                           </motion.button>
                         </div>
                       </motion.div>
-                    ))}
-                  </div>
-                )}
-
-                <AnimatePresence>
-                  {showAddPayment && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className='mt-6 p-6 bg-gradient-to-r from-blue-50 to-blue-100/50 rounded-2xl border-2 border-blue-200'
-                    >
-                      <div className='flex items-start justify-between mb-4'>
-                        <div>
-                          <p className='text-sm text-blue-900 mb-1 font-bold'>
-                            Add New Payment Method
-                          </p>
-                          <p className='text-xs text-blue-800'>
-                            Payment method addition will redirect you to a
-                            secure Stripe/PayPal page.
-                          </p>
-                        </div>
-                        <motion.button
-                          onClick={() => setShowAddPayment(false)}
-                          whileHover={{ scale: 1.1, rotate: 90 }}
-                          whileTap={{ scale: 0.9 }}
-                          className='p-1.5 hover:bg-blue-200 rounded-lg transition-all'
-                        >
-                          <X className='w-5 h-5 text-blue-600' />
-                        </motion.button>
-                      </div>
-                      <div className='flex gap-3'>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className='flex-1 px-5 py-3 bg-white border-2 border-blue-300 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm'
-                        >
-                          Add Card
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className='flex-1 px-5 py-3 bg-white border-2 border-blue-300 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm'
-                        >
-                          Add PayPal
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    )}
+                  </AnimatePresence>
+                </div>
               </motion.div>
 
               {/* Billing History */}
@@ -1376,12 +1456,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <h3 className='font-bold text-xl text-slate-900 mb-6'>
-                  Billing History
-                </h3>
-                <div className='space-y-4'>
+                <div className='bg-gradient-to-r from-purple-600 to-pink-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Calendar className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Billing History
+                      </h2>
+                      <p className='text-purple-100 text-sm'>
+                        View and download your past invoices
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className='p-6 space-y-4'>
                   {[
                     {
                       id: 'INV-001',
@@ -1459,18 +1552,25 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className='bg-white rounded-3xl p-8 shadow-xl border border-slate-200/50'
+                className='bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden'
               >
-                <div className='flex items-center gap-3 mb-6'>
-                  <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center'>
-                    <Globe className='w-5 h-5 text-white' />
+                <div className='bg-gradient-to-r from-blue-600 to-cyan-600 p-6'>
+                  <div className='flex items-center gap-3'>
+                    <div className='w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center'>
+                      <Globe className='w-6 h-6 text-white' />
+                    </div>
+                    <div>
+                      <h2 className='text-xl font-bold text-white'>
+                        Language & Region
+                      </h2>
+                      <p className='text-blue-100 text-sm'>
+                        Customize your language and regional preferences
+                      </p>
+                    </div>
                   </div>
-                  <h3 className='font-bold text-xl text-slate-900'>
-                    Language & Region
-                  </h3>
                 </div>
 
-                <div className='space-y-5'>
+                <div className='p-6 space-y-5'>
                   {/* Language */}
                   <div>
                     <label className='block text-sm font-bold text-slate-700 mb-3'>
