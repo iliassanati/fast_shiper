@@ -12,7 +12,7 @@ import {
   Package as PackageIcon,
   Truck,
   DollarSign,
-  Weight,
+  Scale,
   Ruler,
   ExternalLink,
   Copy,
@@ -22,6 +22,9 @@ import {
   Phone,
   User,
   Home,
+  Sparkles,
+  TrendingUp,
+  Box,
 } from 'lucide-react';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useShipmentStore, useNotificationStore } from '@/stores';
@@ -34,6 +37,7 @@ export default function ShipmentDetailsPageOptimized() {
   const [shipment, setShipment] = useState(getShipmentById(id || ''));
   const [copiedTracking, setCopiedTracking] = useState(false);
 
+  // Fetch shipment
   useEffect(() => {
     if (id) {
       const loadShipment = async () => {
@@ -51,6 +55,7 @@ export default function ShipmentDetailsPageOptimized() {
     }
   }, [id, getShipmentById]);
 
+  // Copy tracking number
   const copyTrackingNumber = () => {
     if (shipment?.trackingNumber) {
       navigator.clipboard.writeText(shipment.trackingNumber);
@@ -60,6 +65,7 @@ export default function ShipmentDetailsPageOptimized() {
     }
   };
 
+  // Track externally
   const handleTrackExternal = () => {
     if (!shipment) return;
     const trackingUrls: Record<string, string> = {
@@ -74,18 +80,20 @@ export default function ShipmentDetailsPageOptimized() {
     window.open(url, '_blank');
   };
 
+  // Not found state
   if (!shipment) {
     return (
-      <DashboardLayout>
+      <DashboardLayout activeSection='shipments'>
         <div className='text-center py-20'>
-          <div className='w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg'>
-            <Truck className='w-12 h-12 text-slate-400' />
+          <div className='w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg'>
+            <AlertCircle className='w-12 h-12 text-red-500' />
           </div>
-          <h2 className='text-3xl font-bold text-slate-900 mb-3 tracking-tight'>
+          <h3 className='text-2xl font-bold text-slate-900 mb-2'>
             Shipment Not Found
-          </h2>
-          <p className='text-slate-600 mb-8 leading-relaxed'>
-            The shipment you're looking for doesn't exist or has been removed.
+          </h3>
+          <p className='text-slate-600 mb-8'>
+            The shipment you're looking for doesn't exist or you don't have
+            access to it.
           </p>
           <button
             onClick={() => navigate('/shipments')}
@@ -98,11 +106,12 @@ export default function ShipmentDetailsPageOptimized() {
     );
   }
 
+  // Status config
   const getStatusConfig = (status: string) => {
     const configs = {
       in_transit: {
         gradient: 'from-orange-600 to-red-600',
-        bg: 'from-orange-100 to-red-100',
+        bg: 'from-orange-50 to-red-50',
         text: 'text-orange-800',
         border: 'border-orange-300',
         label: 'In Transit',
@@ -110,7 +119,7 @@ export default function ShipmentDetailsPageOptimized() {
       },
       delivered: {
         gradient: 'from-green-600 to-emerald-600',
-        bg: 'from-green-100 to-emerald-100',
+        bg: 'from-green-50 to-emerald-50',
         text: 'text-green-800',
         border: 'border-green-300',
         label: 'Delivered',
@@ -118,7 +127,7 @@ export default function ShipmentDetailsPageOptimized() {
       },
       pending: {
         gradient: 'from-yellow-600 to-orange-600',
-        bg: 'from-yellow-100 to-orange-100',
+        bg: 'from-yellow-50 to-orange-50',
         text: 'text-yellow-800',
         border: 'border-yellow-300',
         label: 'Pending',
@@ -212,112 +221,138 @@ export default function ShipmentDetailsPageOptimized() {
   const trackingTimeline = getTrackingTimeline();
 
   return (
-    <DashboardLayout>
+    <DashboardLayout activeSection='shipments'>
       <div className='space-y-6'>
-        {/* Enhanced Header */}
-        <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+        {/* ========== ENHANCED HEADER ========== */}
+        <div className='flex items-center justify-between'>
           <div className='flex items-center gap-4'>
             <motion.button
               onClick={() => navigate('/shipments')}
-              className='p-3 hover:bg-slate-100 rounded-xl transition-colors'
+              className='p-3 hover:bg-slate-100 rounded-xl transition-colors group'
               whileHover={{ scale: 1.05, x: -3 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowLeft className='w-6 h-6' />
+              <ArrowLeft className='w-6 h-6 text-slate-600 group-hover:text-slate-900' />
             </motion.button>
             <div>
-              <h1 className='text-4xl font-bold text-slate-900 tracking-tight mb-2'>
+              <h1 className='text-3xl font-bold text-slate-900 tracking-tight text-left'>
                 Shipment Details
               </h1>
-              <p className='text-slate-600 leading-relaxed'>
-                ID: {shipment.id}
-              </p>
+              <div className='flex items-center gap-3 mt-2'>
+                <span className='flex items-center gap-2 text-slate-600'>
+                  <Truck className='w-4 h-4' />
+                  <span className='font-medium'>{shipment.carrier}</span>
+                </span>
+                <span className='text-slate-600'>•</span>
+                <span className='flex items-center gap-2 text-slate-600'>
+                  <Box className='w-4 h-4' />
+                  <span>{shipment.packages} package(s)</span>
+                </span>
+              </div>
             </div>
           </div>
 
+          {/* Status Badge */}
           <div
-            className={`px-6 py-3 rounded-xl text-sm font-bold border-2 bg-gradient-to-r ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border} shadow-md flex items-center gap-2`}
+            className={`px-6 py-3 rounded-2xl ${statusConfig.bg} border-2 border-opacity-50 shadow-md bg-gradient-to-br`}
           >
-            <StatusIcon className='w-5 h-5' />
-            {statusConfig.label}
+            <div className='flex items-center gap-3'>
+              <div className={`${statusConfig.text}`}>
+                <StatusIcon className='w-5 h-5' />
+              </div>
+              <div className='text-left'>
+                <p className={`font-bold ${statusConfig.text} text-lg`}>
+                  {statusConfig.label}
+                </p>
+                <p className='text-sm text-slate-600'>
+                  {shipment.status === 'delivered'
+                    ? shipment.deliveredDate
+                    : `Est: ${shipment.estimatedDelivery}`}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className='grid lg:grid-cols-3 gap-6'>
-          {/* Main Content */}
+          {/* ========== MAIN CONTENT ========== */}
           <div className='lg:col-span-2 space-y-6'>
             {/* Tracking Timeline */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              className='bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-100'
             >
-              <h3 className='text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3'>
-                <div
-                  className={`w-10 h-10 rounded-xl bg-gradient-to-br ${statusConfig.gradient} flex items-center justify-center shadow-md`}
-                >
-                  <Truck className='w-5 h-5 text-white' />
-                </div>
-                Tracking Timeline
-              </h3>
+              <div className='p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white'>
+                <h2 className='font-bold text-slate-900 text-xl flex items-center gap-3'>
+                  <div
+                    className={`w-10 h-10 bg-gradient-to-br ${statusConfig.gradient} rounded-xl flex items-center justify-center shadow-md`}
+                  >
+                    <TrendingUp className='w-5 h-5 text-white' />
+                  </div>
+                  Tracking Timeline
+                </h2>
+              </div>
 
-              <div className='relative'>
-                {trackingTimeline.map((item, index) => {
-                  const TimelineIcon = item.icon;
-                  return (
-                    <div key={index} className='flex gap-4 pb-8 last:pb-0'>
-                      {/* Timeline Line */}
-                      <div className='flex flex-col items-center'>
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${
-                            item.status === 'completed'
-                              ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-                              : item.status === 'current'
-                              ? 'bg-gradient-to-br from-blue-500 to-cyan-500 animate-pulse'
-                              : 'bg-gradient-to-br from-slate-200 to-slate-300'
-                          }`}
-                        >
-                          {item.status === 'completed' ? (
-                            <Check className='w-6 h-6 text-white' />
-                          ) : (
-                            <TimelineIcon
-                              className={`w-6 h-6 ${
-                                item.status === 'current'
-                                  ? 'text-white'
-                                  : 'text-slate-400'
+              <div className='p-6'>
+                <div className='relative'>
+                  {trackingTimeline.map((item, index) => {
+                    const TimelineIcon = item.icon;
+                    return (
+                      <div key={index} className='flex gap-4 pb-8 last:pb-0'>
+                        {/* Timeline Line */}
+                        <div className='flex flex-col items-center'>
+                          <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${
+                              item.status === 'completed'
+                                ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+                                : item.status === 'current'
+                                ? 'bg-gradient-to-br from-blue-500 to-cyan-500 animate-pulse'
+                                : 'bg-gradient-to-br from-slate-200 to-slate-300'
+                            }`}
+                          >
+                            {item.status === 'completed' ? (
+                              <Check className='w-6 h-6 text-white' />
+                            ) : (
+                              <TimelineIcon
+                                className={`w-6 h-6 ${
+                                  item.status === 'current'
+                                    ? 'text-white'
+                                    : 'text-slate-400'
+                                }`}
+                              />
+                            )}
+                          </div>
+                          {index < trackingTimeline.length - 1 && (
+                            <div
+                              className={`w-1 h-full my-2 rounded-full ${
+                                item.status === 'completed'
+                                  ? 'bg-gradient-to-b from-green-500 to-emerald-500'
+                                  : 'bg-slate-300'
                               }`}
                             />
                           )}
                         </div>
-                        {index < trackingTimeline.length - 1 && (
-                          <div
-                            className={`w-1 h-full my-2 rounded-full ${
-                              item.status === 'completed'
-                                ? 'bg-gradient-to-b from-green-500 to-emerald-500'
-                                : 'bg-slate-300'
-                            }`}
-                          />
-                        )}
-                      </div>
 
-                      {/* Content */}
-                      <div className='flex-1 pb-4'>
-                        <h4 className='text-xl font-bold text-slate-900 mb-1'>
-                          {item.title}
-                        </h4>
-                        <p className='text-sm text-slate-600 mb-2 leading-relaxed'>
-                          {item.description}
-                        </p>
-                        <div className='flex items-center gap-2 text-xs text-slate-500'>
-                          <Calendar className='w-3 h-3' />
-                          <span>
-                            {item.date} • {item.time}
-                          </span>
+                        {/* Content */}
+                        <div className='flex-1 pb-4'>
+                          <h4 className='text-xl font-bold text-slate-900 mb-1'>
+                            {item.title}
+                          </h4>
+                          <p className='text-sm text-slate-600 mb-2 leading-relaxed'>
+                            {item.description}
+                          </p>
+                          <div className='flex items-center gap-2 text-xs text-slate-500'>
+                            <Calendar className='w-3 h-3' />
+                            <span>
+                              {item.date} • {item.time}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </motion.div>
 
@@ -326,12 +361,15 @@ export default function ShipmentDetailsPageOptimized() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'
             >
-              <h3 className='text-2xl font-bold text-slate-900 mb-6'>
+              <h2 className='text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3'>
+                <div className='w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md'>
+                  <Info className='w-5 h-5 text-white' />
+                </div>
                 Shipment Information
-              </h3>
-              <div className='grid grid-cols-2 gap-4'>
+              </h2>
+              <div className='grid md:grid-cols-2 gap-4'>
                 <div className='p-5 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200'>
                   <div className='flex items-center gap-2 text-blue-700 mb-2'>
                     <Truck className='w-5 h-5' />
@@ -383,7 +421,7 @@ export default function ShipmentDetailsPageOptimized() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'
             >
               <h3 className='text-2xl font-bold text-slate-900 mb-4'>
                 Tracking Number
@@ -401,7 +439,7 @@ export default function ShipmentDetailsPageOptimized() {
                   <div className='flex gap-2'>
                     <motion.button
                       onClick={copyTrackingNumber}
-                      className='px-4 py-3 bg-white border-2 border-blue-300 text-blue-700 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center gap-2'
+                      className='px-4 py-3 bg-white border-2 border-blue-300 text-blue-700 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center gap-2 shadow-sm'
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -433,13 +471,13 @@ export default function ShipmentDetailsPageOptimized() {
             </motion.div>
           </div>
 
-          {/* Sidebar */}
+          {/* ========== SIDEBAR ========== */}
           <div className='space-y-6'>
             {/* Delivery Address */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'
             >
               <h3 className='text-xl font-bold text-slate-900 mb-4 flex items-center gap-2'>
                 <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-green-600 to-emerald-600 flex items-center justify-center shadow-md'>
@@ -467,7 +505,7 @@ export default function ShipmentDetailsPageOptimized() {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
+              transition={{ delay: 0.05 }}
               className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border-2 border-green-200 shadow-lg'
             >
               <h3 className='text-xl font-bold text-green-900 mb-2 flex items-center gap-2'>
@@ -487,16 +525,19 @@ export default function ShipmentDetailsPageOptimized() {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.15 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              transition={{ delay: 0.1 }}
+              className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'
             >
-              <h3 className='text-xl font-bold text-slate-900 mb-4'>
+              <h3 className='text-xl font-bold text-slate-900 mb-4 flex items-center gap-2'>
+                <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-md'>
+                  <Sparkles className='w-5 h-5 text-white' />
+                </div>
                 Package Details
               </h3>
               <div className='space-y-3'>
-                <div className='p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl'>
+                <div className='p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200'>
                   <div className='flex items-center gap-2 text-slate-600 mb-1'>
-                    <Weight className='w-4 h-4' />
+                    <Scale className='w-4 h-4' />
                     <span className='text-xs font-bold'>Weight</span>
                   </div>
                   <p className='text-lg font-black text-slate-900'>
@@ -504,7 +545,7 @@ export default function ShipmentDetailsPageOptimized() {
                   </p>
                 </div>
 
-                <div className='p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl'>
+                <div className='p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200'>
                   <div className='flex items-center gap-2 text-slate-600 mb-1'>
                     <Ruler className='w-4 h-4' />
                     <span className='text-xs font-bold'>Dimensions</span>
@@ -516,12 +557,12 @@ export default function ShipmentDetailsPageOptimized() {
               </div>
             </motion.div>
 
-            {/* Actions */}
+            {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className='bg-white rounded-2xl p-6 shadow-lg border-2 border-slate-100'
+              transition={{ delay: 0.15 }}
+              className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'
             >
               <h3 className='text-xl font-bold text-slate-900 mb-4'>Actions</h3>
               <div className='space-y-3'>
@@ -548,11 +589,11 @@ export default function ShipmentDetailsPageOptimized() {
               </div>
             </motion.div>
 
-            {/* Help */}
+            {/* Help Card */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.25 }}
+              transition={{ delay: 0.2 }}
               className='bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border-2 border-blue-200'
             >
               <div className='flex items-start gap-3'>
@@ -569,7 +610,7 @@ export default function ShipmentDetailsPageOptimized() {
                   </p>
                   <button
                     onClick={handleTrackExternal}
-                    className='text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1'
+                    className='text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors'
                   >
                     Visit {shipment.carrier}
                     <ExternalLink className='w-4 h-4' />
