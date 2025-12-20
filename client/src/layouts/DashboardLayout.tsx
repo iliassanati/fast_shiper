@@ -251,7 +251,7 @@ export default function DashboardLayout({
         <header className='sticky top-0 z-30 bg-white bg-opacity-90 backdrop-blur-lg border-b border-slate-200 px-6 py-4'>
           <div className='flex items-center justify-between'>
             <div className='flex-1 max-w-xl'>
-              <div className='relative'>
+              {/* <div className='relative'>
                 <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400' />
                 <input
                   type='text'
@@ -260,7 +260,7 @@ export default function DashboardLayout({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className='w-full pl-11 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors'
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* <div className='flex items-center gap-4 ml-6'>

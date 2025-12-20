@@ -13,8 +13,8 @@ export default function HeroSection() {
   const navigate = useNavigate();
 
   return (
-    <section className='relative pt-32 pb-20 px-6 overflow-hidden'>
-      <div className='max-w-7xl mx-auto'>
+    <section className='relative pt-32 pb-20 px-6 overflow-hidden min-h-screen flex items-center'>
+      <div className='max-w-7xl mx-auto w-full'>
         <div className='grid lg:grid-cols-2 gap-12 items-center'>
           {/* Left Content */}
           <motion.div
@@ -26,7 +26,7 @@ export default function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className='inline-flex items-center gap-2 px-4 py-2  rounded-full  mb-6'
+              className='inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6'
             ></motion.div>
 
             <h1 className='text-5xl lg:text-7xl font-bold text-slate-900 mb-6 leading-tight'>
@@ -44,17 +44,20 @@ export default function HeroSection() {
 
             <div className='flex flex-col sm:flex-row gap-4 mb-12'>
               <motion.button
-                className='group px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl flex items-center justify-center gap-2'
+                className='group px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl flex items-center justify-center gap-2 relative overflow-hidden'
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigate('/auth/register')}
               >
-                Get Your US Address FREE
-                <ArrowRight className='w-5 h-5 group-hover:translate-x-1 transition-transform' />
+                {/* Shine effect */}
+                <div className='absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000' />
+
+                <span className='relative'>Get Your US Address FREE</span>
+                <ArrowRight className='w-5 h-5 group-hover:translate-x-1 transition-transform relative' />
               </motion.button>
 
               <motion.button
-                className='px-8 py-4 bg-white text-blue-600 rounded-full font-bold text-lg shadow-lg hover:shadow-xl border-2 border-blue-200 flex items-center justify-center gap-2'
+                className='px-8 py-4 bg-white/80 backdrop-blur-sm text-blue-600 rounded-full font-bold text-lg shadow-lg hover:shadow-xl border-2 border-blue-200 flex items-center justify-center gap-2'
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigate('#calculator')}
@@ -109,32 +112,17 @@ export default function HeroSection() {
                 ease: 'easeInOut',
               }}
             >
-              {/* <div className='bg-gradient-to-br from-blue-100 to-cyan-100 rounded-3xl shadow-2xl'> */}
-              <img
-                src={'/assets/hero_overview.jpg'}
-                className='w-3xl h-2xl rounded-md '
-              />
-              {/* <div className='bg-white rounded-2xl p-6'>
-                  <div className='text-center text-8xl mb-4'>📦</div>
-                  <div className='flex justify-center items-center gap-4 mb-4'>
-                    <span className='text-4xl'>🇺🇸</span>
-                    <motion.div
-                      animate={{ x: [0, 10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <ArrowRight className='w-8 h-8 text-blue-600' />
-                    </motion.div>
-                    <span className='text-4xl'>🇲🇦</span>
-                  </div>
-                  <p className='text-center text-slate-600 font-medium'>
-                    Fast & Secure Shipping
-                  </p>
-                </div> */}
-              {/* </div> */}
+              <div className='backdrop-blur-xl bg-white/40 border border-white/30 rounded-3xl shadow-2xl overflow-hidden'>
+                <img
+                  src={'/assets/hero_overview.jpg'}
+                  className='w-full h-auto rounded-2xl'
+                  alt='Fast Shipper Overview'
+                />
+              </div>
 
               {/* Floating Cards */}
               <motion.div
-                className='absolute -top-6 -left-6 bg-white rounded-2xl shadow-xl p-4 border-2 border-blue-100'
+                className='absolute -top-6 -left-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl p-4 border-2 border-blue-100'
                 animate={{ y: [0, -10, 0], rotate: [-2, 2, -2] }}
                 transition={{ duration: 4, repeat: Infinity }}
               >
@@ -148,7 +136,7 @@ export default function HeroSection() {
               </motion.div>
 
               <motion.div
-                className='absolute -bottom-6 -right-6 bg-white rounded-2xl shadow-xl p-4 border-2 border-orange-100'
+                className='absolute -bottom-6 -right-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl p-4 border-2 border-orange-100'
                 animate={{ y: [0, 10, 0], rotate: [2, -2, 2] }}
                 transition={{ duration: 4, repeat: Infinity, delay: 0.5 }}
               >

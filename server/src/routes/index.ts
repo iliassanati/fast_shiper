@@ -8,6 +8,7 @@ import packageRoutes from './packageRoutes.js';
 import photoRequestRoutes from './photoRequestRoutes.js';
 import shipmentRoutes from './shipmentRoutes.js';
 import ticketRoutes from './ticketRoutes.js';
+import publicShippingRoutes from './publicShippingRoutes.js';
 
 const router = Router();
 
@@ -27,5 +28,7 @@ router.use('/photo-requests', photoRequestRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/admin', adminRoutes);
+
+router.use('/public/shipping', publicShippingRoutes);
 
 export default router;

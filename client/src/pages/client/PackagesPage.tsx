@@ -1,4 +1,4 @@
-// client/src/pages/client/PackagesPage.tsx - UPDATED with Consolidating Packages
+// client/src/pages/client/PackagesPage.tsx - OPTIMIZED UI/UX VERSION
 import PackageCard from '@/components/dashboard/PackageCard';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import {
@@ -21,6 +21,12 @@ import {
   Sparkles,
   Truck,
   X,
+  ChevronDown,
+  LayoutGrid,
+  List,
+  SlidersHorizontal,
+  TrendingUp,
+  AlertCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -48,6 +54,7 @@ export default function PackagesPage() {
   const [sortBy, setSortBy] = useState<'date' | 'weight' | 'storage'>('date');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Fetch packages on mount
   useEffect(() => {
@@ -71,14 +78,12 @@ export default function PackagesPage() {
     }
   }, [packages, updateStatsFromPackages]);
 
-  // FIX: Clear selection when leaving page (except for workflow pages)
+  // Clear selection when leaving page (except for workflow pages)
   useEffect(() => {
     return () => {
-      // Get the NEW path we're navigating TO
       const workflowPaths = ['/consolidation', '/shipping', '/request-info'];
       const newPath = window.location.pathname;
 
-      // Only clear if NOT navigating to a workflow page
       if (!workflowPaths.some((path) => newPath.startsWith(path))) {
         console.log('📦 Clearing package selection - leaving packages page');
         clearSelection();
@@ -101,7 +106,7 @@ export default function PackagesPage() {
     }
   }, [fetchPackages, showToast]);
 
-  // Calculate stats for filter options - UPDATED: Added consolidating
+  // Calculate stats for filter options
   const packageStats = useMemo(() => {
     return {
       all: packages.length,
@@ -119,53 +124,64 @@ export default function PackagesPage() {
     };
   }, [packages]);
 
-  // Filter options with dynamic counts - UPDATED: Added consolidating option
+  // Filter options with dynamic counts
   const statusOptions: Array<{
     label: string;
     value: PackageStatus | 'all' | 'consolidating';
     count: number;
     icon: React.ReactNode;
+    color: string;
+    bgColor: string;
   }> = [
     {
       label: 'All Packages',
       value: 'all',
       count: packageStats.all,
       icon: <PackageIcon className='w-4 h-4' />,
+      color: 'text-slate-700',
+      bgColor: 'bg-gradient-to-br from-slate-50 to-slate-100',
     },
     {
       label: 'In Storage',
       value: 'received',
       count: packageStats.received,
       icon: <Archive className='w-4 h-4' />,
+      color: 'text-green-700',
+      bgColor: 'bg-gradient-to-br from-green-50 to-emerald-50',
     },
     {
       label: 'Consolidating',
       value: 'consolidating',
       count: packageStats.consolidating,
       icon: <RefreshCw className='w-4 h-4' />,
+      color: 'text-purple-700',
+      bgColor: 'bg-gradient-to-br from-purple-50 to-pink-50',
     },
     {
       label: 'Consolidated',
       value: 'consolidated',
       count: packageStats.consolidated,
       icon: <Box className='w-4 h-4' />,
+      color: 'text-blue-700',
+      bgColor: 'bg-gradient-to-br from-blue-50 to-cyan-50',
     },
     {
       label: 'Shipped',
       value: 'shipped',
       count: packageStats.shipped,
       icon: <Truck className='w-4 h-4' />,
+      color: 'text-orange-700',
+      bgColor: 'bg-gradient-to-br from-orange-50 to-red-50',
     },
   ];
 
-  // Filtered and sorted packages - UPDATED: Added consolidating filter
+  // Filtered and sorted packages
   const filteredPackages = useMemo(() => {
     let filtered = packages;
 
     // Apply status filter
     if (filterStatus !== 'all') {
       if (filterStatus === 'consolidating') {
-        // Show packages being consolidated (not results)
         filtered = filtered.filter(
           (pkg) => pkg.status === 'consolidated' && !pkg.isConsolidatedResult
         );
@@ -214,7 +230,7 @@ export default function PackagesPage() {
     return filtered;
   }, [packages, filterStatus, searchQuery, sortBy]);
 
-  // Get packages available for consolidation (status: received)
+  // Get packages available for consolidation
   const shippablePackages = useMemo(() => {
     return packages.filter((p) => p.status === 'received');
   }, [packages]);
@@ -226,7 +242,7 @@ export default function PackagesPage() {
     );
   }, [packages, selectedPackageIds]);
 
-  // Bulk actions with better UX
+  // Bulk actions
   const handleSelectAll = () => {
     if (selectedPackageIds.length === filteredPackages.length) {
       clearSelection();
@@ -250,7 +266,6 @@ export default function PackagesPage() {
       return;
     }
 
-    // Update selection to only include shippable packages
     if (selectedShippable.length !== selectedPackageIds.length) {
       selectMultiplePackages(selectedShippable.map((p) => p.id));
       showToast(`${selectedShippable.length} package(s) ready to ship`, 'info');
@@ -260,13 +275,11 @@ export default function PackagesPage() {
   };
 
   const handleBulkConsolidate = () => {
-    // Get packages that can be consolidated
     const consolidatableSelected = packages.filter(
       (pkg) => selectedPackageIds.includes(pkg.id) && pkg.status === 'received'
     );
 
     if (consolidatableSelected.length === 0) {
-      // No packages selected or selected packages not eligible
       if (shippablePackages.length < 2) {
         showToast(
           'You need at least 2 packages in storage to consolidate',
@@ -274,7 +287,6 @@ export default function PackagesPage() {
         );
         return;
       }
-      // Guide user to select packages
       showToast('Select 2 or more packages in storage to consolidate', 'info');
       return;
     }
@@ -287,14 +299,12 @@ export default function PackagesPage() {
       return;
     }
 
-    // Update selection to only include consolidatable packages
     selectMultiplePackages(consolidatableSelected.map((p) => p.id));
     navigate('/consolidation');
   };
 
   const handleRequestPhotos = () => {
     if (selectedPackageIds.length === 0) {
-      // Guide user to select a package
       if (shippablePackages.length === 0) {
         showToast('No packages in storage to request photos for', 'warning');
         return;
@@ -303,7 +313,6 @@ export default function PackagesPage() {
       return;
     }
 
-    // Only one package at a time for photo requests
     const validPackages = packages.filter(
       (pkg) => selectedPackageIds.includes(pkg.id) && pkg.status === 'received'
     );
@@ -316,19 +325,18 @@ export default function PackagesPage() {
       return;
     }
 
-    // Use first selected package
     selectMultiplePackages([validPackages[0].id]);
     navigate('/request-info');
   };
 
-  // Show loading state
+  // Loading state
   if (loading && packages.length === 0) {
     return (
       <DashboardLayout activeSection='packages'>
         <div className='flex items-center justify-center min-h-[400px]'>
           <div className='text-center'>
             <div className='w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4' />
-            <p className='text-slate-600'>Loading packages...</p>
+            <p className='text-slate-600 font-medium'>Loading packages...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -338,177 +346,225 @@ export default function PackagesPage() {
   return (
     <DashboardLayout activeSection='packages'>
       <div className='space-y-6'>
-        {/* Header */}
-        <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
-          <div>
-            <h1 className='text-3xl font-bold text-slate-900'>My Packages</h1>
-            <p className='text-slate-600'>
-              {filteredPackages.length} of {packages.length} packages
-              {filterStatus !== 'all' && ` (filtered by ${filterStatus})`}
-            </p>
+        {/* ========== ENHANCED HEADER ========== */}
+        <div className='flex flex-col gap-6'>
+          {/* Title Row */}
+          <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+            <div className='space-y-1'>
+              <h1 className='text-4xl font-bold text-slate-900 tracking-tight text-left'>
+                My Packages
+              </h1>
+              <div className='flex items-center gap-3 text-slate-600'>
+                <span className='flex items-center gap-2'>
+                  <div className='w-2 h-2 rounded-full bg-blue-500' />
+                  <span className='font-medium'>
+                    {filteredPackages.length} of {packages.length} packages
+                  </span>
+                </span>
+                {filterStatus !== 'all' && (
+                  <>
+                    <span className='text-slate-300'>•</span>
+                    <span className='text-sm capitalize'>
+                      filtered by {filterStatus.replace('_', ' ')}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className='flex flex-wrap items-center gap-3'>
+              {/* View Mode Toggle */}
+              <div className='flex items-center bg-white rounded-xl shadow-sm border border-slate-200 p-1'>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 rounded-lg transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title='Grid view'
+                >
+                  <LayoutGrid className='w-4 h-4' />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-lg transition-all ${
+                    viewMode === 'list'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title='List view'
+                >
+                  <List className='w-4 h-4' />
+                </button>
+              </div>
+
+              {/* Refresh Button */}
+              <motion.button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className='px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-semibold flex items-center gap-2 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm disabled:opacity-50 transition-all'
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+                />
+                <span className='hidden sm:inline'>Refresh</span>
+              </motion.button>
+
+              {/* Ship Button */}
+              <motion.button
+                onClick={handleBulkShip}
+                className={`px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-all ${
+                  selectedShippable.length > 0
+                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-xl hover:scale-105'
+                    : 'bg-slate-200 text-slate-500 cursor-help'
+                }`}
+                whileHover={selectedShippable.length > 0 ? { scale: 1.05 } : {}}
+                whileTap={selectedShippable.length > 0 ? { scale: 0.95 } : {}}
+                title={
+                  selectedShippable.length > 0
+                    ? `Ship ${selectedShippable.length} package(s)`
+                    : 'Select packages in storage to ship'
+                }
+              >
+                <Truck className='w-4 h-4' />
+                <span>Ship</span>
+                {selectedShippable.length > 0 && (
+                  <span className='bg-white/30 px-2 py-0.5 rounded-full text-xs font-bold'>
+                    {selectedShippable.length}
+                  </span>
+                )}
+              </motion.button>
+
+              {/* Consolidate Button */}
+              <motion.button
+                onClick={handleBulkConsolidate}
+                className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md ${
+                  selectedShippable.length >= 2
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:shadow-lg hover:scale-105'
+                    : 'bg-slate-200 text-slate-500 cursor-help'
+                }`}
+                whileHover={
+                  selectedShippable.length >= 2 ? { scale: 1.05 } : {}
+                }
+                whileTap={selectedShippable.length >= 2 ? { scale: 0.95 } : {}}
+                title={
+                  selectedShippable.length >= 2
+                    ? `Consolidate ${selectedShippable.length} packages`
+                    : 'Select 2+ packages in storage to consolidate'
+                }
+              >
+                <Box className='w-4 h-4' />
+                <span className='hidden sm:inline'>Consolidate</span>
+                {selectedShippable.length >= 2 && (
+                  <span className='bg-white/30 px-2 py-0.5 rounded-full text-xs font-bold'>
+                    {selectedShippable.length}
+                  </span>
+                )}
+              </motion.button>
+
+              {/* Request Photos Button */}
+              <motion.button
+                onClick={handleRequestPhotos}
+                className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md ${
+                  selectedShippable.length === 1
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg hover:scale-105'
+                    : 'bg-slate-200 text-slate-500 cursor-help'
+                }`}
+                whileHover={
+                  selectedShippable.length === 1 ? { scale: 1.05 } : {}
+                }
+                whileTap={selectedShippable.length === 1 ? { scale: 0.95 } : {}}
+                title={
+                  selectedShippable.length === 1
+                    ? 'Request photos for selected package'
+                    : 'Select one package to request photos'
+                }
+              >
+                <Camera className='w-4 h-4' />
+                <span className='hidden sm:inline'>Photos</span>
+              </motion.button>
+            </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className='flex flex-wrap gap-3'>
-            {/* Refresh Button */}
-            <motion.button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className='px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-semibold flex items-center gap-2 hover:bg-slate-200 disabled:opacity-50'
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          {/* Consolidating Packages Alert */}
+          {packageStats.consolidating > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className='bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl p-5 shadow-sm'
             >
-              <RefreshCw
-                className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
-              />
-              Refresh
-            </motion.button>
+              <div className='flex items-start gap-4'>
+                <div className='w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg'>
+                  <Loader2 className='w-7 h-7 text-white animate-spin' />
+                </div>
+                <div className='flex-1 text-left'>
+                  <h3 className='text-xl font-bold text-purple-900 mb-2 flex items-center gap-2'>
+                    📦 Consolidation in Progress
+                    <span className='px-3 py-1 bg-purple-600 text-white text-xs font-bold rounded-full'>
+                      {packageStats.consolidating}
+                    </span>
+                  </h3>
+                  <p className='text-purple-800 leading-relaxed'>
+                    Your packages are being consolidated. You'll receive a
+                    notification when ready (typically 2-4 business days).
+                  </p>
+                </div>
+                <button
+                  onClick={() => setFilterStatus('consolidating')}
+                  className='px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors shadow-sm'
+                >
+                  View Details
+                </button>
+              </div>
+            </motion.div>
+          )}
 
-            {/* Ship Button */}
-            <motion.button
-              onClick={handleBulkShip}
-              className={`px-4 py-2 rounded-lg font-semibold shadow-lg flex items-center gap-2 transition-all ${
-                selectedShippable.length > 0
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                  : 'bg-slate-200 text-slate-500 cursor-help'
-              }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title={
-                selectedShippable.length > 0
-                  ? `Ship ${selectedShippable.length} package(s)`
-                  : 'Select packages in storage to ship'
-              }
+          {/* Helper hint when no selection */}
+          {selectedPackageIds.length === 0 && shippablePackages.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className='bg-gradient-to-r from-blue-50 via-cyan-50 to-blue-50 border border-blue-200 rounded-2xl p-5 shadow-sm'
             >
-              <Truck className='w-4 h-4' />
-              Ship
-              {selectedShippable.length > 0 && (
-                <span className='bg-white/30 px-1.5 py-0.5 rounded text-xs'>
-                  {selectedShippable.length}
-                </span>
-              )}
-            </motion.button>
-
-            {/* Consolidate Button */}
-            <motion.button
-              onClick={handleBulkConsolidate}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all ${
-                selectedShippable.length >= 2
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-200 text-slate-500 cursor-help'
-              }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title={
-                selectedShippable.length >= 2
-                  ? `Consolidate ${selectedShippable.length} packages`
-                  : 'Select 2+ packages in storage to consolidate'
-              }
-            >
-              <Box className='w-4 h-4' />
-              Consolidate
-              {selectedShippable.length >= 2 && (
-                <span className='bg-white/30 px-1.5 py-0.5 rounded text-xs'>
-                  {selectedShippable.length}
-                </span>
-              )}
-            </motion.button>
-
-            {/* Request Photos Button */}
-            <motion.button
-              onClick={handleRequestPhotos}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all ${
-                selectedShippable.length === 1
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-slate-200 text-slate-500 cursor-help'
-              }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title={
-                selectedShippable.length === 1
-                  ? 'Request photos for selected package'
-                  : 'Select one package to request photos'
-              }
-            >
-              <Camera className='w-4 h-4' />
-              Photos
-            </motion.button>
-          </div>
+              <div className='flex items-center gap-4'>
+                <div className='w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md'>
+                  <Sparkles className='w-6 h-6 text-white' />
+                </div>
+                <div className='flex-1 text-left'>
+                  <p className='font-bold text-blue-900 text-lg mb-1'>
+                    💡 Quick Tip: Select packages to take action
+                  </p>
+                  <p className='text-blue-700 leading-relaxed'>
+                    Click on packages to select them, then use the action
+                    buttons above to ship, consolidate, or request photos.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
 
-        {/* NEW: Consolidating Packages Alert */}
-        {packageStats.consolidating > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className='bg-purple-50 border-2 border-purple-200 rounded-2xl p-4'
-          >
-            <div className='flex items-start gap-4'>
-              <div className='w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0'>
-                <Loader2 className='w-6 h-6 text-purple-600 animate-spin' />
-              </div>
-              <div className='flex-1'>
-                <h3 className='text-lg font-bold text-purple-900 mb-1'>
-                  📦 Consolidation in Progress
-                </h3>
-                <p className='text-purple-700'>
-                  You have <strong>{packageStats.consolidating}</strong> package
-                  {packageStats.consolidating !== 1 ? 's' : ''} currently being
-                  consolidated. We'll notify you when ready (typically 2-4
-                  business days).
-                </p>
-              </div>
-              <button
-                onClick={() => setFilterStatus('consolidating')}
-                className='px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors'
-              >
-                View
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Helper hint when no selection */}
-        {selectedPackageIds.length === 0 && shippablePackages.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className='bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4'
-          >
-            <div className='flex items-center gap-3'>
-              <div className='w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center'>
-                <Sparkles className='w-5 h-5 text-blue-600' />
-              </div>
-              <div>
-                <p className='font-semibold text-blue-900'>
-                  Quick Tip: Select packages to take action
-                </p>
-                <p className='text-sm text-blue-700'>
-                  Click on packages to select them, then use the buttons above
-                  to ship, consolidate, or request photos.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Search & Filters Bar */}
-        <div className='bg-white rounded-2xl p-4 shadow-lg border border-slate-100'>
-          <div className='flex flex-col md:flex-row gap-4'>
+        {/* ========== ENHANCED SEARCH & FILTERS ========== */}
+        <div className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100'>
+          <div className='flex flex-col lg:flex-row gap-4'>
             {/* Search */}
             <div className='flex-1 relative'>
-              <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400' />
+              <Search className='absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400' />
               <input
                 type='text'
-                placeholder='Search packages by name, retailer, or tracking number...'
+                placeholder='Search by name, retailer, or tracking number...'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className='w-full pl-11 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors'
+                className='w-full pl-12 pr-12 py-3.5 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all text-slate-900 placeholder:text-slate-400'
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className='absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600'
+                  className='absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors'
                 >
                   <X className='w-5 h-5' />
                 </button>
@@ -518,16 +574,21 @@ export default function PackagesPage() {
             {/* Filter Toggle */}
             <motion.button
               onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-3 rounded-xl font-semibold flex items-center gap-2 transition-colors ${
+              className={`px-6 py-3.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm ${
                 showFilters
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
               }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Filter className='w-5 h-5' />
-              Filters
+              <SlidersHorizontal className='w-5 h-5' />
+              <span>Filters</span>
+              {showFilters ? (
+                <ChevronDown className='w-4 h-4' />
+              ) : (
+                <Filter className='w-4 h-4' />
+              )}
             </motion.button>
           </div>
 
@@ -538,12 +599,13 @@ export default function PackagesPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className='mt-4 pt-4 border-t border-slate-200'
+                className='mt-6 pt-6 border-t border-slate-200'
               >
-                <div className='grid md:grid-cols-2 gap-4'>
+                <div className='grid md:grid-cols-2 gap-6'>
                   {/* Sort By */}
                   <div>
-                    <label className='block text-sm font-semibold text-slate-700 mb-2'>
+                    <label className='block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2'>
+                      <TrendingUp className='w-4 h-4' />
                       Sort By
                     </label>
                     <select
@@ -551,17 +613,18 @@ export default function PackagesPage() {
                       onChange={(e) =>
                         setSortBy(e.target.value as typeof sortBy)
                       }
-                      className='w-full px-4 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none'
+                      className='w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none font-medium text-slate-900 bg-white'
                     >
-                      <option value='date'>Received Date (Newest)</option>
-                      <option value='weight'>Weight (Heaviest)</option>
-                      <option value='storage'>Storage Days (Most)</option>
+                      <option value='date'>📅 Received Date (Newest)</option>
+                      <option value='weight'>⚖️ Weight (Heaviest)</option>
+                      <option value='storage'>⏱️ Storage Days (Most)</option>
                     </select>
                   </div>
 
                   {/* Status Filter */}
                   <div>
-                    <label className='block text-sm font-semibold text-slate-700 mb-2'>
+                    <label className='block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2'>
+                      <Filter className='w-4 h-4' />
                       Status
                     </label>
                     <select
@@ -569,7 +632,7 @@ export default function PackagesPage() {
                       onChange={(e) =>
                         setFilterStatus(e.target.value as typeof filterStatus)
                       }
-                      className='w-full px-4 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none'
+                      className='w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none font-medium text-slate-900 bg-white'
                     >
                       {statusOptions.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -584,117 +647,200 @@ export default function PackagesPage() {
           </AnimatePresence>
         </div>
 
-        {/* Stats Summary - UPDATED: Added Consolidating stat */}
+        {/* ========== ENHANCED STATS CARDS ========== */}
         {packages.length > 0 && (
-          <div className='grid md:grid-cols-4 gap-4'>
-            <div className='bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center'>
-                  <PackageIcon className='w-5 h-5 text-white' />
+          <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            {/* In Storage Card */}
+            <motion.button
+              onClick={() => setFilterStatus('received')}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0 }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className={`bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border-2 transition-all text-left ${
+                filterStatus === 'received'
+                  ? 'border-green-400 shadow-lg ring-4 ring-green-100'
+                  : 'border-green-200 shadow-md hover:shadow-lg'
+              }`}
+            >
+              <div className='flex items-start justify-between mb-3'>
+                <div className='w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-sm'>
+                  <Archive className='w-6 h-6 text-white' />
                 </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Total Packages</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packageStats.all}
-                  </p>
+                <span className='px-3 py-1 bg-green-600 text-white text-sm font-bold rounded-full'>
+                  {packageStats.received}
+                </span>
+              </div>
+              <p className='text-sm text-slate-600 font-medium mb-2'>
+                In Storage
+              </p>
+              <div className='flex items-center gap-2'>
+                <div className='w-full h-2 bg-green-200/50 rounded-full overflow-hidden'>
+                  <div
+                    className='h-full bg-green-500 transition-all'
+                    style={{
+                      width: `${
+                        packages.length > 0
+                          ? (packageStats.received / packages.length) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+            </motion.button>
 
-            <div className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center'>
-                  <Archive className='w-5 h-5 text-white' />
+            {/* Consolidating Card */}
+            <motion.button
+              onClick={() => setFilterStatus('consolidating')}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className={`bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 transition-all text-left ${
+                filterStatus === 'consolidating'
+                  ? 'border-purple-400 shadow-lg ring-4 ring-purple-100'
+                  : 'border-purple-200 shadow-md hover:shadow-lg'
+              }`}
+            >
+              <div className='flex items-start justify-between mb-3'>
+                <div className='w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-sm'>
+                  <RefreshCw className='w-6 h-6 text-white' />
                 </div>
-                <div>
-                  <p className='text-xs text-slate-600'>In Storage</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packageStats.received}
-                  </p>
+                <span className='px-3 py-1 bg-purple-600 text-white text-sm font-bold rounded-full'>
+                  {packageStats.consolidating}
+                </span>
+              </div>
+              <p className='text-sm text-slate-600 font-medium mb-2'>
+                Consolidating
+              </p>
+              <div className='flex items-center gap-2'>
+                <div className='w-full h-2 bg-purple-200/50 rounded-full overflow-hidden'>
+                  <div
+                    className='h-full bg-purple-500 transition-all'
+                    style={{
+                      width: `${
+                        packages.length > 0
+                          ? (packageStats.consolidating / packages.length) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+            </motion.button>
 
-            {/* NEW: Consolidating stat card */}
-            <div className='bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center'>
-                  <RefreshCw className='w-5 h-5 text-white' />
+            {/* Consolidated Card */}
+            <motion.button
+              onClick={() => setFilterStatus('consolidated')}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className={`bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-5 border-2 transition-all text-left ${
+                filterStatus === 'consolidated'
+                  ? 'border-blue-400 shadow-lg ring-4 ring-blue-100'
+                  : 'border-blue-200 shadow-md hover:shadow-lg'
+              }`}
+            >
+              <div className='flex items-start justify-between mb-3'>
+                <div className='w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm'>
+                  <Box className='w-6 h-6 text-white' />
                 </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Consolidating</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packageStats.consolidating}
-                  </p>
+                <span className='px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full'>
+                  {packageStats.consolidated}
+                </span>
+              </div>
+              <p className='text-sm text-slate-600 font-medium mb-2'>
+                Consolidated
+              </p>
+              <div className='flex items-center gap-2'>
+                <div className='w-full h-2 bg-blue-200/50 rounded-full overflow-hidden'>
+                  <div
+                    className='h-full bg-blue-500 transition-all'
+                    style={{
+                      width: `${
+                        packages.length > 0
+                          ? (packageStats.consolidated / packages.length) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+            </motion.button>
 
-            <div className='bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-200'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center'>
-                  <Truck className='w-5 h-5 text-white' />
+            {/* Shipped Card */}
+            <motion.button
+              onClick={() => setFilterStatus('shipped')}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className={`bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-5 border-2 transition-all text-left ${
+                filterStatus === 'shipped'
+                  ? 'border-orange-400 shadow-lg ring-4 ring-orange-100'
+                  : 'border-orange-200 shadow-md hover:shadow-lg'
+              }`}
+            >
+              <div className='flex items-start justify-between mb-3'>
+                <div className='w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-sm'>
+                  <Truck className='w-6 h-6 text-white' />
                 </div>
-                <div>
-                  <p className='text-xs text-slate-600'>Shipped</p>
-                  <p className='text-2xl font-bold text-slate-900'>
-                    {packageStats.shipped}
-                  </p>
+                <span className='px-3 py-1 bg-orange-600 text-white text-sm font-bold rounded-full'>
+                  {packageStats.shipped}
+                </span>
+              </div>
+              <p className='text-sm text-slate-600 font-medium mb-2'>Shipped</p>
+              <div className='flex items-center gap-2'>
+                <div className='w-full h-2 bg-orange-200/50 rounded-full overflow-hidden'>
+                  <div
+                    className='h-full bg-orange-500 transition-all'
+                    style={{
+                      width: `${
+                        packages.length > 0
+                          ? (packageStats.shipped / packages.length) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+            </motion.button>
           </div>
         )}
 
-        {/* Status Filter Tabs */}
-        <div className='flex gap-3 flex-wrap'>
-          {statusOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => setFilterStatus(option.value)}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                filterStatus === option.value
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              {option.icon}
-              {option.label}
-              <span
-                className={`text-sm ${
-                  filterStatus === option.value
-                    ? 'text-blue-200'
-                    : 'text-slate-500'
-                }`}
-              >
-                ({option.count})
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Bulk Selection Bar */}
+        {/* ========== BULK SELECTION BAR ========== */}
         <AnimatePresence>
           {selectedPackageIds.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className='bg-blue-50 border-2 border-blue-200 rounded-2xl p-4'
+              className='sticky top-20 z-30 bg-gradient-to-r from-blue-600 to-cyan-600 border-2 border-blue-500 rounded-2xl p-5 shadow-2xl'
             >
               <div className='flex items-center justify-between'>
                 <div className='flex items-center gap-4'>
-                  <div className='flex items-center gap-2'>
-                    <div className='w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold'>
+                  <div className='flex items-center gap-3'>
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className='w-12 h-12 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-lg shadow-md'
+                    >
                       {selectedPackageIds.length}
-                    </div>
-                    <div>
-                      <span className='font-semibold text-slate-900'>
-                        {selectedPackageIds.length} package(s) selected
+                    </motion.div>
+                    <div className='text-white'>
+                      <span className='font-bold text-lg block'>
+                        {selectedPackageIds.length} package
+                        {selectedPackageIds.length !== 1 ? 's' : ''} selected
                       </span>
                       {selectedShippable.length !==
                         selectedPackageIds.length && (
-                        <p className='text-xs text-blue-700'>
+                        <p className='text-sm text-blue-100'>
                           {selectedShippable.length} available for
                           shipping/consolidation
                         </p>
@@ -703,28 +849,34 @@ export default function PackagesPage() {
                   </div>
                   <button
                     onClick={handleSelectAll}
-                    className='text-sm text-blue-600 hover:text-blue-700 font-semibold'
+                    className='px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-bold transition-colors backdrop-blur-sm'
                   >
                     {selectedPackageIds.length === filteredPackages.length
-                      ? 'Deselect All'
+                      ? '✓ Deselect All'
                       : 'Select All'}
                   </button>
                 </div>
 
                 <button
                   onClick={clearSelection}
-                  className='p-2 hover:bg-blue-100 rounded-lg transition-colors'
+                  className='p-3 hover:bg-white/20 rounded-xl transition-colors'
                 >
-                  <X className='w-5 h-5 text-slate-600' />
+                  <X className='w-6 h-6 text-white' />
                 </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Packages Grid */}
+        {/* ========== PACKAGES GRID/LIST ========== */}
         {filteredPackages.length > 0 ? (
-          <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-6'>
+          <div
+            className={
+              viewMode === 'grid'
+                ? 'grid md:grid-cols-2 lg:grid-cols-3 gap-6'
+                : 'space-y-4'
+            }
+          >
             {filteredPackages.map((pkg, i) => (
               <div key={pkg.id} className='relative'>
                 {/* Selection Checkbox */}
@@ -734,16 +886,16 @@ export default function PackagesPage() {
                       e.stopPropagation();
                       togglePackageSelection(pkg.id);
                     }}
-                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                    className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all shadow-md ${
                       selectedPackageIds.includes(pkg.id)
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'bg-white border-slate-300 hover:border-blue-400'
+                        ? 'bg-blue-600 border-blue-600 scale-110'
+                        : 'bg-white border-slate-300 hover:border-blue-400 hover:scale-105'
                     }`}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {selectedPackageIds.includes(pkg.id) && (
-                      <Check className='w-4 h-4 text-white' />
+                      <Check className='w-5 h-5 text-white' />
                     )}
                   </motion.button>
                 </div>
@@ -751,7 +903,7 @@ export default function PackagesPage() {
                 {/* Consolidated Result Badge */}
                 {pkg.isConsolidatedResult && (
                   <div className='absolute top-4 right-4 z-10'>
-                    <span className='px-2 py-1 bg-purple-500 text-white text-xs font-bold rounded-full'>
+                    <span className='px-3 py-1.5 bg-purple-500 text-white text-xs font-bold rounded-full shadow-lg'>
                       Consolidated
                     </span>
                   </div>
@@ -766,37 +918,39 @@ export default function PackagesPage() {
             ))}
           </div>
         ) : (
-          // Empty State
+          // ========== ENHANCED EMPTY STATE ==========
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className='text-center py-20'
           >
-            <div className='w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6'>
+            <div className='w-32 h-32 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg'>
               {searchQuery ? (
-                <Search className='w-12 h-12 text-slate-400' />
+                <Search className='w-16 h-16 text-slate-400' />
               ) : (
-                <PackageIcon className='w-12 h-12 text-slate-400' />
+                <PackageIcon className='w-16 h-16 text-slate-400' />
               )}
             </div>
-            <h3 className='text-2xl font-bold text-slate-900 mb-2'>
+            <h3 className='text-3xl font-bold text-slate-900 mb-3'>
               {searchQuery ? 'No packages found' : 'No packages yet'}
             </h3>
-            <p className='text-slate-600 mb-8 max-w-md mx-auto'>
+            <p className='text-slate-600 text-lg mb-8 max-w-md mx-auto leading-relaxed'>
               {searchQuery
-                ? 'Try adjusting your search or filters'
+                ? "Try adjusting your search or filters to find what you're looking for"
                 : 'Start shopping from US stores and your packages will appear here'}
             </p>
             {searchQuery && (
-              <button
+              <motion.button
                 onClick={() => {
                   setSearchQuery('');
                   setFilterStatus('all');
                 }}
-                className='px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors'
+                className='px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full font-bold shadow-lg hover:shadow-xl transition-all'
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 Clear Filters
-              </button>
+              </motion.button>
             )}
           </motion.div>
         )}

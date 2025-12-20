@@ -1,4 +1,4 @@
-// src/sections/dashboard/OverviewSection.tsx - UPDATED WITH 30 DAYS STORAGE
+// src/sections/dashboard/OverviewSection.tsx - IMPROVED UX/UI VERSION
 import PackageCard from '@/components/dashboard/PackageCard';
 import { STORAGE } from '@/data/client/constants';
 import {
@@ -108,12 +108,12 @@ export default function OverviewSection() {
   };
 
   return (
-    <div className='space-y-6'>
-      {/* Welcome Banner */}
+    <div className='space-y-8'>
+      {/* Welcome Banner - IMPROVED */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className='bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 rounded-3xl p-8 text-white relative overflow-hidden'
+        className='bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 rounded-3xl p-8 lg:p-10 text-white relative overflow-hidden shadow-xl'
       >
         <div className='absolute inset-0 bg-white opacity-10'>
           <div
@@ -125,40 +125,41 @@ export default function OverviewSection() {
             }}
           />
         </div>
+
         <div className='relative z-10'>
-          <div className='flex items-center justify-between mb-4'>
-            <div>
-              <h1 className='text-3xl font-bold mb-2'>
+          {/* Welcome Header - IMPROVED spacing and typography */}
+          <div className='flex flex-row justify-between items-start mb-8 '>
+            <div className='flex-row text-left'>
+              <h1 className='text-3xl lg:text-4xl font-bold mb-3 leading-tight'>
                 Welcome back, {user?.name.split(' ')[0]}! 👋
               </h1>
+              <p className='text-blue-100 text-lg leading-relaxed '>
+                Here's what's happening with your packages today
+              </p>
             </div>
-            <div className='flex items-center gap-3'>
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-                className='text-6xl'
-              >
-                📦
-              </motion.div>
-            </div>
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+              className='text-6xl ml-4 flex-shrink-0'
+            >
+              📦
+            </motion.div>
           </div>
-          {/* US Address Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className='flex items-start justify-between mb-4'>
-              <div>
-                <h3 className='text-xl font-bold text-slate-900 mb-1 text-left'>
+
+          {/* US Address Card - IMPROVED layout and readability */}
+          <div className='bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 text-left'>
+            <div className='flex flex-row items-start justify-between mb-5'>
+              <div className='flex-row'>
+                <h3 className='text-xl font-bold text-white mb-2'>
                   Your US Shipping Address
                 </h3>
-                <p className='text-sm text-slate-200'>
-                  Use this address for all your US purchases
+                <p className='text-blue-100 text-sm leading-relaxed'>
+                  Use this address when shopping from US stores
                 </p>
               </div>
               <motion.button
                 onClick={copyAddress}
-                className='px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-700'
+                className='px-5 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl flex-shrink-0 ml-4'
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -170,52 +171,88 @@ export default function OverviewSection() {
                 {copiedAddress ? 'Copied!' : 'Copy'}
               </motion.button>
             </div>
-            Your Locker Number is: 71017425
-            {usAddress && (
-              <div className='rounded-xl p-4 font-mono text-white space-y-1'>
-                <p className='font-bold'>Name : {usAddress.name}</p>
+            <p className='text-blue-200 font-bold uppercase tracking-wider text-center mb-4'>
+              Your Locker Number : {user?.suiteNumber}
+            </p>
 
-                <p>Address Line 1: {usAddress.street}</p>
-                <p>Address Line 2: {usAddress.suite}</p>
-                <p>City : {usAddress.city}</p>
-                <p>State : {usAddress.country}</p>
-                <p>Zip : {usAddress.country}</p>
-                <p className='text-white'>Phone: {usAddress.phone}</p>
+            {usAddress && (
+              <div className='flex justify-center items-start'>
+                <div className='grid md:grid-cols-2 gap-8'>
+                  {/* Left Column */}
+                  <div className='space-y-3'>
+                    <div className='space-y-1 leading-relaxed'>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        Name
+                      </p>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        Address line 1
+                      </p>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        Address line 2
+                      </p>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        City
+                      </p>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        State
+                      </p>
+                      <p className='text-blue-200 font-semibold uppercase tracking-wider'>
+                        Zip Code
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className='space-y-3'>
+                    <div className='text-white space-y-1 leading-relaxed'>
+                      <p>{usAddress.name}</p>
+                      <p>{usAddress.street}</p>
+                      <p>{usAddress.suite}</p>
+                      <p>{usAddress.city}</p>
+                      <p>{usAddress.country}</p>
+                      <p>{usAddress.city.split(' ')[2]}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
-            <p className='text-xs text-slate-100 mt-3'>
-              💡 Always include suite number ({user?.suiteNumber}) • Free
-              storage for {STORAGE.FREE_DAYS} days
-            </p>
-          </motion.div>
+
+            {/* Important Note - IMPROVED */}
+            <div className='mt-5 pt-5 border-t border-white/20 text-center'>
+              <p className='text-blue-100 text-sm leading-relaxed'>
+                <span className='font-semibold'>💡 Important:</span> Always
+                include your suite number ({user?.suiteNumber}) • Free storage
+                for {STORAGE.FREE_DAYS} days
+              </p>
+            </div>
+          </div>
         </div>
       </motion.div>
 
-      {/* Storage Warning Alert - Show if there are packages with warnings */}
+      {/* Storage Warning Alert - IMPROVED spacing and hierarchy */}
       {calculatedStats.criticalCount > 0 && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className='bg-red-50 border-2 border-red-300 rounded-2xl p-6'
+          className='bg-red-50 border-2 border-red-300 rounded-2xl p-6 shadow-lg'
         >
-          <div className='flex items-start gap-4'>
-            <div className='w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0'>
-              <AlertTriangle className='w-6 h-6 text-red-600' />
+          <div className='flex items-start gap-5'>
+            <div className='w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center flex-shrink-0'>
+              <AlertTriangle className='w-7 h-7 text-red-600' />
             </div>
-            <div className='flex-1'>
-              <h3 className='text-lg font-bold text-red-900 mb-1'>
+            <div className='flex-1 min-w-0'>
+              <h3 className='text-xl font-bold text-red-900 mb-2'>
                 🚨 Critical Storage Warning
               </h3>
-              <p className='text-red-700'>
+              <p className='text-red-700 leading-relaxed mb-4'>
                 You have <strong>{calculatedStats.criticalCount}</strong>{' '}
-                package
-                {calculatedStats.criticalCount !== 1 ? 's' : ''} with{' '}
+                package{calculatedStats.criticalCount !== 1 ? 's' : ''} with{' '}
                 <strong>3 days or less</strong> of free storage remaining.
                 Please ship soon to avoid additional fees.
               </p>
               <button
                 onClick={() => navigate('/packages')}
-                className='mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors'
+                className='px-6 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors shadow-md hover:shadow-lg'
               >
                 View Packages
               </button>
@@ -228,17 +265,17 @@ export default function OverviewSection() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className='bg-orange-50 border-2 border-orange-200 rounded-2xl p-6'
+          className='bg-orange-50 border-2 border-orange-200 rounded-2xl p-6 shadow-lg'
         >
-          <div className='flex items-start gap-4'>
-            <div className='w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0'>
-              <Clock className='w-6 h-6 text-orange-600' />
+          <div className='flex items-start gap-5'>
+            <div className='w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center flex-shrink-0'>
+              <Clock className='w-7 h-7 text-orange-600' />
             </div>
-            <div className='flex-1'>
-              <h3 className='text-lg font-bold text-orange-900 mb-1'>
+            <div className='flex-1 min-w-0'>
+              <h3 className='text-xl font-bold text-orange-900 mb-2'>
                 ⚠️ Storage Reminder
               </h3>
-              <p className='text-orange-700'>
+              <p className='text-orange-700 leading-relaxed mb-4'>
                 You have{' '}
                 <strong>
                   {calculatedStats.warningCount - calculatedStats.criticalCount}
@@ -254,7 +291,7 @@ export default function OverviewSection() {
               </p>
               <button
                 onClick={() => navigate('/packages')}
-                className='mt-4 px-6 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors'
+                className='px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold hover:bg-orange-700 transition-colors shadow-md hover:shadow-lg'
               >
                 View Packages
               </button>
@@ -263,18 +300,24 @@ export default function OverviewSection() {
         </motion.div>
       )}
 
-      {/* Recent Packages */}
+      {/* Recent Packages - IMPROVED header and spacing */}
       {recentPackages.length > 0 && (
-        <div>
-          <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-2xl font-bold text-slate-900'>
-              Recent Packages
-            </h2>
+        <div className='space-y-6'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <h2 className='text-2xl lg:text-3xl font-bold text-slate-900 leading-tight'>
+                Recent Packages
+              </h2>
+              <p className='text-slate-600 mt-1'>
+                Your latest arrivals in storage
+              </p>
+            </div>
             <div className='flex items-center gap-3'>
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg disabled:opacity-50'
+                className='p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl disabled:opacity-50 transition-colors'
+                title='Refresh packages'
               >
                 <RefreshCw
                   className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`}
@@ -282,13 +325,14 @@ export default function OverviewSection() {
               </button>
               <button
                 onClick={() => navigate('/packages')}
-                className='text-blue-600 hover:text-blue-700 font-semibold text-sm'
+                className='text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors'
               >
                 View All ({calculatedStats.inStorage}) →
               </button>
             </div>
           </div>
-          <div className='grid md:grid-cols-3 gap-6'>
+
+          <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-6'>
             {recentPackages.map((pkg, i) => (
               <PackageCard
                 key={pkg.id}
@@ -301,20 +345,26 @@ export default function OverviewSection() {
         </div>
       )}
 
-      {/* Active Shipments */}
+      {/* Active Shipments - IMPROVED layout */}
       {activeShipments.length > 0 && (
-        <div>
-          <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-2xl font-bold text-slate-900'>
-              Active Shipments
-            </h2>
+        <div className='space-y-6'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <h2 className='text-2xl lg:text-3xl font-bold text-slate-900 leading-tight'>
+                Active Shipments
+              </h2>
+              <p className='text-slate-600 mt-1'>
+                Track your packages in transit
+              </p>
+            </div>
             <button
               onClick={() => navigate('/shipments')}
-              className='text-blue-600 hover:text-blue-700 font-semibold text-sm'
+              className='text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors'
             >
               View All →
             </button>
           </div>
+
           <div className='space-y-4'>
             {activeShipments.map((shipment, i) => (
               <motion.div
@@ -326,27 +376,27 @@ export default function OverviewSection() {
                 onClick={() => navigate(`/shipments/${shipment.id}`)}
                 className='bg-white rounded-2xl p-6 shadow-lg border border-slate-100 cursor-pointer hover:shadow-xl transition-all'
               >
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-4'>
-                    <div className='w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center'>
-                      <Truck className='w-6 h-6 text-blue-600' />
+                <div className='flex items-center justify-between gap-6'>
+                  <div className='flex items-center gap-5 flex-1 min-w-0'>
+                    <div className='w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center flex-shrink-0'>
+                      <Truck className='w-7 h-7 text-blue-600' />
                     </div>
-                    <div>
-                      <p className='font-bold text-slate-900'>
+                    <div className='flex-1 min-w-0'>
+                      <p className='font-bold text-lg text-slate-900 mb-1'>
                         {shipment.carrier}
                       </p>
-                      <p className='text-sm text-slate-600 font-mono'>
+                      <p className='text-sm text-slate-600 font-mono truncate'>
                         {shipment.trackingNumber}
                       </p>
                     </div>
                   </div>
-                  <div className='text-right'>
-                    <span className='px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold'>
+                  <div className='text-right flex-shrink-0'>
+                    <span className='inline-block px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-sm font-semibold mb-2'>
                       {shipment.status === 'in_transit'
                         ? 'In Transit'
                         : 'Pending'}
                     </span>
-                    <p className='text-xs text-slate-500 mt-1'>
+                    <p className='text-xs text-slate-500'>
                       Est: {shipment.estimatedDelivery}
                     </p>
                   </div>
@@ -357,23 +407,37 @@ export default function OverviewSection() {
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Empty State - IMPROVED */}
       {packages.length === 0 && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className='text-center py-20'
         >
-          <div className='w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6'>
-            <Package className='w-12 h-12 text-slate-400' />
+          <div className='w-28 h-28 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-lg'>
+            <Package className='w-14 h-14 text-slate-400' />
           </div>
-          <h3 className='text-2xl font-bold text-slate-900 mb-2'>
+          <h3 className='text-3xl font-bold text-slate-900 mb-3'>
             No packages yet
           </h3>
-          <p className='text-slate-600 mb-8 max-w-md mx-auto'>
+          <p className='text-slate-600 mb-8 max-w-md mx-auto leading-relaxed text-lg'>
             Start shopping from US stores and your packages will appear here.
             Free storage for {STORAGE.FREE_DAYS} days!
           </p>
+          <div className='flex flex-wrap gap-3 justify-center text-sm text-slate-500'>
+            <div className='flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl'>
+              <span>✓</span>
+              <span>Free US Address</span>
+            </div>
+            <div className='flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl'>
+              <span>✓</span>
+              <span>{STORAGE.FREE_DAYS} Days Free Storage</span>
+            </div>
+            <div className='flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl'>
+              <span>✓</span>
+              <span>Package Consolidation</span>
+            </div>
+          </div>
         </motion.div>
       )}
     </div>

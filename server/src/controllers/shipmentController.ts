@@ -772,3 +772,124 @@ export const downloadLabel = async (
     sendError(res, error.message || 'Failed to download label', 500);
   }
 };
+
+// server/src/controllers/shipmentController.ts - ALTERNATIVE APPROACH
+// Add this NEW function alongside your existing getShippingRates
+
+/**
+ * Get shipping rates for PUBLIC users (home page calculator)
+ * This is a simplified version without authentication requirements
+ */
+export const getPublicShippingRates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const {
+      weight,
+      dimensions,
+      destinationCountryCode = 'MA',
+      destinationCity,
+      destinationPostalCode,
+      destinationPhone,
+      declaredValue,
+    } = req.body;
+
+    console.log('📦 ========================================');
+    console.log('📦 PUBLIC SHIPPING RATES REQUEST');
+    console.log('📦 ========================================');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+    // Validations
+    if (!weight || parseFloat(weight) <= 0) {
+      sendError(res, 'Valid weight is required (must be greater than 0)', 400);
+      return;
+    }
+
+    if (
+      !dimensions ||
+      !dimensions.length ||
+      !dimensions.width ||
+      !dimensions.height
+    ) {
+      sendError(
+        res,
+        'Valid dimensions are required (length, width, height)',
+        400
+      );
+      return;
+    }
+
+    if (!destinationCity || destinationCity.trim().length === 0) {
+      sendError(res, 'Destination city is required', 400);
+      return;
+    }
+
+    if (!destinationPostalCode || destinationPostalCode.trim().length === 0) {
+      sendError(res, 'Destination postal code is required', 400);
+      return;
+    }
+
+    if (!destinationPhone || destinationPhone.trim().length === 0) {
+      sendError(res, 'Destination phone number is required', 400);
+      return;
+    }
+
+    if (!shippoService.isConfigured()) {
+      console.error('❌ Shippo service is not configured!');
+      sendError(
+        res,
+        'Shipping service is not configured. Please contact support.',
+        503
+      );
+      return;
+    }
+
+    console.log('✅ All validations passed');
+    console.log('🚚 Fetching public shipping rates');
+
+    // Get rates from Shippo
+    const rates = await shippoService.getRates({
+      weight: parseFloat(weight),
+      dimensions: {
+        length: parseFloat(dimensions.length),
+        width: parseFloat(dimensions.width),
+        height: parseFloat(dimensions.height),
+      },
+      originCountryCode: 'US',
+      destinationCountryCode,
+      destinationCity: destinationCity.trim(),
+      destinationPostalCode: destinationPostalCode.trim(),
+      destinationPhone: destinationPhone.trim(),
+      declaredValue: declaredValue ? parseFloat(declaredValue) : 100,
+    });
+
+    console.log(`✅ Retrieved ${rates.length} shipping rates`);
+
+    if (rates.length === 0) {
+      sendSuccess(
+        res,
+        rates,
+        'No shipping rates available for this route.',
+        200
+      );
+      return;
+    }
+
+    sendSuccess(res, rates, `Found ${rates.length} available shipping rates`);
+  } catch (error: any) {
+    console.error('❌ Error getting public shipping rates:', error);
+
+    let userMessage = 'Failed to get shipping rates';
+
+    if (error.message.includes('not configured')) {
+      userMessage =
+        'Shipping service is temporarily unavailable. Please try again later.';
+    } else if (error.message.includes('Shippo')) {
+      userMessage = error.message;
+    }
+
+    sendError(res, userMessage, 500);
+  }
+};
